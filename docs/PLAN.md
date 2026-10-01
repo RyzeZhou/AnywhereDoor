@@ -96,7 +96,48 @@ Windows 在这个位置是**真空**：同类工具（Flow Launcher、PowerToys 
 - **收藏持久化**：JSON，`%APPDATA%\AnywhereDoor\favorites.json`
 - 原则：不联网、不常驻大内存、启动快
 
+## 数据与存储（三份 JSON + 图标缓存）
+
+| 位置 | 内容 | 要点 |
+|---|---|---|
+| `%APPDATA%\AnywhereDoor\favorites.json` | `{version, apps:[AppEntry…]}` | **四页混在一个数组里**，靠每条的 `page` 分页；随用户漫游 |
+| `%APPDATA%\AnywhereDoor\groups.json` | `[{page, name, color}]` | 分组**登记表**，与条目分开存 —— 空分组也能存在 |
+| `%APPDATA%\AnywhereDoor\settings.json` | `{doubleClickOpen, siteColors}` | 站点颜色记在任意门侧（站点清单属于易远传，只读） |
+| `%LOCALAPPDATA%\AnywhereDoor\iconcache\<id>_<size>.png` | 图标缓存 | 机器本地，不漫游；`favorites.json` 里 `iconPath` 指过去 |
+
+一条收藏的字段：`id`（`SHA256(target)` 前 8 位，天然去重）/ `name` / `kind` / `page` /
+`target` / `arguments` / `workingDir` / `group` / `position` / `iconPath`。
+
+- **分组不是容器，是条目上的一个字符串字段**（`group`）；null 或缺字段 = 未分类。
+- **布局就只是 `position`**：每页各自 0 起连续，没有坐标与行列 —— 程序页 `WrapPanel` 按顺序流式排，
+  窗口宽度一变排布跟着变。**口径两边必须一致**：CLI 早先是全局 0..N-1，已统一为页内（2026-10-01）。
+- 侧栏显示的是"登记表名字 ∪ 条目里出现过的名字"，所以**只改条目的 `group` 就能凭空造出一个分组**
+  （未登记，颜色中性）。
+- 同一个"页"概念两套写法：`favorites.json` 里是字符串（`programs/local/web/remote`），
+  `groups.json` 里是整数（`0/1/2`）—— 手改 JSON 时最容易错的地方。
+- **"当前选中哪个分组"不落盘**（视图状态，每次启动回「全部」）；GUI 也**不监视文件**，
+  CLI 改完要重启 GUI 才看得见（实测：改名后运行中的界面不变，重启立刻正确）。
+- 颜色预设中英对照、GUI 与 CLI 共用一份（`Awd.Core/GroupPalette.cs`），**落盘永远是 `#RRGGBB`**。
+
+## CLI 与 GUI 等效（2026-10-01）
+
+`awd`（`src/Awd.CLI`）现在覆盖 GUI 的整理动作，且**无状态** —— 分组当参数用，跟目录那套逻辑一致：
+
+```
+awd group list|add|rename|remove|color <名称> [--page 程序|本地|网站|远程]
+awd fav list [--page P] [--group G]        # --group - 只看未分类
+awd fav group <id> <分组名|->              # = GUI 把条目拖到侧栏
+awd fav add <目标> [--page P] [--kind K] [--group G]
+awd fav move <id> <页内位置> | remove <id>
+awd group color <名称> 蓝|blue|6|#0000FF   # 十项中英对照预设，见 help
+```
+
+不等效的只剩三处，都是"GUI 才有"的东西：**拖拽摆位与投放区**（鼠标手势）、
+**书签导入**（GUI 窗口）、**站点颜色**（在 `settings.json`，CLI 暂未开命令）。
+
 ## 阶段（调整后）
+
+
 
 | 阶段 | 内容 |
 |---|---|
@@ -150,6 +191,14 @@ Windows 在这个位置是**真空**：同类工具（Flow Launcher、PowerToys 
   `RowContainer` 的 `Focusable=False` 保留 —— 收藏行的点击走自己那层 `OnRowMouseDown`（启动/看目标），不依赖选择。
   **为什么几轮自动化都没发现**：UIA 的 `SelectionItemPattern.Select()` 直接改选中项、**绕开鼠标**，
   所以"UIA 能切换"从来不能证明"鼠标能切换"。已建 git 仓库（首个提交 `0ea3a02` 为现状快照）。
+- **2026-10-01 CLI 与 GUI 等效**：`GroupStore` 下沉到 `Awd.Core`，新增中英对照色板 `GroupPalette`
+  （GUI 右键色盘与 CLI `--color` 共用同一份，落盘仍是 `#RRGGBB`）；CLI 补齐
+  `group list|add|rename|remove|color` 与 `fav group` / `fav list --page --group` / `fav add --page --kind`；
+  `position` 口径统一成"每页各自 0 起"。测试里逮到一个自己写的 bug：`fav move` 报成功但顺序没变 ——
+  重排时又按了**旧的** position，把刚插好的顺序立刻冲回原样；改成以列表先后为准后复测通过。
+  无头实测全通（建组、中英文名与序号上色、归组、按组筛选、改名连带条目、删组回未分类、四类错误路径），
+  并验证 **CLI 改完必须重启 GUI 才看得见**（运行中的界面不监视文件）。测试数据已全部还原，
+  用户原始 7 条收藏与「日历」分组未动。
 - **环境事实（重要）**：本机 DSH 会话不在交互式窗口站（`GetCursorPos`/`SetCursorPos` 均返回 False，
   `GetForegroundWindow` 为 0）——**合成鼠标输入不可用，拖拽与右键菜单类交互无法自动化**，只能人工验证；
   静态渲染验证可用 `PrintWindow` + UIA 驱动按钮/输入/选择。
