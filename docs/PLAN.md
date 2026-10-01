@@ -142,7 +142,19 @@ Windows 在这个位置是**真空**：同类工具（Flow Launcher、PowerToys 
   现在只在没人判过（`!e.Handled`）时才给默认值。构建 0 错 0 警告；
   染底/描边/热压过选中已用 `PrintWindow` + 逐像素取证（见笔记 `AWD-2026-09-30-04`）。
   **仍需人工实测**：高亮时机、禁止光标、松手后的状态条 —— 拖拽无法自动化。
+- **2026-09-30 分组侧栏"点不动"（真根因，v8.1）**：`SideContainer` 里的 `<Setter Property="Focusable" Value="False"/>`
+  让侧栏**从 v1 起就没被鼠标点选过** —— WPF `ListBoxItem` 的选择逻辑是
+  `if (Selector.UiGetIsSelectable(this) && Focus())`，不可聚焦时 `Focus()` 返回 false，整段选择被跳过。
+  改成不设 `Focusable`（默认可聚焦）+ `IsTabStop=False`（保住 Tab 顺序与初始焦点）+ `FocusVisualStyle={x:Null}`
+  （整行染底已经说明选中）。**站点栏、本地/网站分组栏同病同治**（共用 `SideContainer`）；
+  `RowContainer` 的 `Focusable=False` 保留 —— 收藏行的点击走自己那层 `OnRowMouseDown`（启动/看目标），不依赖选择。
+  **为什么几轮自动化都没发现**：UIA 的 `SelectionItemPattern.Select()` 直接改选中项、**绕开鼠标**，
+  所以"UIA 能切换"从来不能证明"鼠标能切换"。已建 git 仓库（首个提交 `0ea3a02` 为现状快照）。
 - **环境事实（重要）**：本机 DSH 会话不在交互式窗口站（`GetCursorPos`/`SetCursorPos` 均返回 False，
   `GetForegroundWindow` 为 0）——**合成鼠标输入不可用，拖拽与右键菜单类交互无法自动化**，只能人工验证；
   静态渲染验证可用 `PrintWindow` + UIA 驱动按钮/输入/选择。
+  **但 `PrintWindow` 通道会随会话显示状态失效**：2026-09-30 晚同一台机、同一个 exe，
+  先前 flag=2 出图正常，稍后再抓就 flag=2 全黑、flag=0/1 全白（窗口 `IsWindowVisible=True`、
+  `IsIconic=False`，UIA 照常读到内容），同时进程 DPI 从 175% 变成 125% ——
+  **抓不到图先怀疑采集通道，别判"应用没渲染"**；这时能用的验证只剩 UIA 属性与文本。
 - 未动：托盘 / 全局热键（P1）。

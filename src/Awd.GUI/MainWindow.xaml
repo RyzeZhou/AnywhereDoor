@@ -191,7 +191,13 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Setter Property="Focusable" Value="False"/>
+            <!-- 这里**绝不能**写 Focusable=False：ListBoxItem 的鼠标选择是
+                 `if (Selector.UiGetIsSelectable(this) && Focus())`，不可聚焦时 Focus() 返回 false，
+                 整段选择逻辑被跳过 —— 表现就是"分组看得见、点不动"。
+                 （UIA 的 SelectionItemPattern.Select() 直接改选中项、绕开鼠标，所以自动化一直测不出这个 bug。）
+                 不想让它进 Tab 序列就用 IsTabStop=False（不影响 Focus()）；焦点框省掉，整行染底已经说明选中。 -->
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         </Style>
 
         <!-- 页面顶部添加条的公共底 -->
