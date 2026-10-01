@@ -1,0 +1,166 @@
+<Application x:Class="Awd.GUI.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnMainWindowClose"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme/Tokens.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 全局字体：WPF 默认回退链对中文会挑到日文字体（US/FSY 都踩过），这里显式钉死 -->
+            <Style TargetType="{x:Type Window}">
+                <Setter Property="FontFamily" Value="{StaticResource Font.Text}"/>
+            </Style>
+            <Style TargetType="{x:Type TextBlock}">
+                <Setter Property="FontFamily" Value="{StaticResource Font.Text}"/>
+            </Style>
+
+            <!-- 窄标题栏的无边框图标按钮（＋ / 关闭）：正方形、居中字形、hover 淡底 -->
+            <Style x:Key="HeaderButton" TargetType="Button">
+                <Setter Property="Width" Value="34"/>
+                <Setter Property="Height" Value="26"/>
+                <Setter Property="Padding" Value="0"/>
+                <Setter Property="Margin" Value="2,0"/>
+                <Setter Property="Focusable" Value="False"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="{StaticResource Radius.Default}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Subtle.Hover}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <!-- 添加行/对话框的轻量按钮与输入框（主窗口与对话框共用，故放 App 级） -->
+            <Style x:Key="GhostButton" TargetType="Button">
+                <Setter Property="Height" Value="24"/>
+                <Setter Property="Padding" Value="10,0"/>
+                <Setter Property="Background" Value="{StaticResource Brush.Surface.Card}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource Brush.Stroke.Default}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="FontSize" Value="{StaticResource Font.Size.Primary}"/>
+                <Setter Property="Foreground" Value="{StaticResource Brush.Text.Primary}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="{StaticResource Radius.Default}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bd" Property="Background" Value="{StaticResource Brush.Subtle.Hover}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+            <Style x:Key="AddBox" TargetType="TextBox">
+                <Setter Property="Height" Value="24"/>
+                <Setter Property="FontSize" Value="{StaticResource Font.Size.Primary}"/>
+                <Setter Property="Padding" Value="6,0"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Background" Value="{StaticResource Brush.Surface.Card}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource Brush.Stroke.Default}"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="SelectionBrush" Value="{StaticResource Brush.Accent}"/>
+                <Setter Property="CaretBrush" Value="{StaticResource Brush.Accent}"/>
+            </Style>
+            <Style x:Key="AddLabel" TargetType="TextBlock">
+                <Setter Property="VerticalAlignment" Value="Center"/>
+                <Setter Property="Margin" Value="0,0,6,0"/>
+                <Setter Property="FontSize" Value="{StaticResource Font.Size.Primary}"/>
+                <Setter Property="Foreground" Value="{StaticResource Brush.Text.Secondary}"/>
+            </Style>
+
+            <!-- 主操作按钮（＋ 收藏 / 保存）：强调色实底 -->
+            <Style x:Key="PrimaryButton" TargetType="Button">
+                <Setter Property="Height" Value="24"/>
+                <Setter Property="Padding" Value="10,0"/>
+                <Setter Property="Background" Value="{StaticResource Brush.Accent}"/>
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="FontSize" Value="{StaticResource Font.Size.Primary}"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                    CornerRadius="{StaticResource Radius.Default}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="bd" Property="Opacity" Value="0.75"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- 细滚动条：无箭头、透明轨道、圆角拇指。
+                 LimLauncher 的教训：粗滚动条 + 两端箭头是多灰并存的廉价感重灾区 -->
+            <Style TargetType="{x:Type ScrollBar}">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Width" Value="8"/>
+                <Setter Property="MinWidth" Value="8"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type ScrollBar}">
+                            <Grid Background="Transparent">
+                                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Style>
+                                                <Style TargetType="Thumb">
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Thumb">
+                                                                <Border Background="#2E000000" CornerRadius="4" Margin="1,2"/>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Background" Value="#55000000"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Thumb.Style>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="Orientation" Value="Horizontal">
+                        <Setter Property="Width" Value="Auto"/>
+                        <Setter Property="Height" Value="8"/>
+                        <Setter Property="MinHeight" Value="8"/>
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

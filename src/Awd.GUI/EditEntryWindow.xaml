@@ -1,0 +1,51 @@
+<Window x:Class="Awd.GUI.EditEntryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="编辑收藏"
+        Width="460" SizeToContent="Height" MinWidth="400"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Brush.Surface}"
+        FontFamily="{StaticResource Font.Text}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <Grid Margin="10">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="名称" Style="{StaticResource AddLabel}" Margin="0,0,8,6"/>
+        <TextBox Grid.Row="0" Grid.Column="1" x:Name="NameBox" Style="{StaticResource AddBox}" Margin="0,0,0,6"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="分组" Style="{StaticResource AddLabel}" Margin="0,0,8,6"/>
+        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="GroupBox" Height="24" Margin="0,0,0,6"
+                  FontSize="{StaticResource Font.Size.Primary}" VerticalContentAlignment="Center"
+                  DisplayMemberPath="Label" SelectedValuePath="Value"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="目标" Style="{StaticResource AddLabel}" Margin="0,0,8,6"/>
+        <TextBox Grid.Row="2" Grid.Column="1" x:Name="TargetBox" Style="{StaticResource AddBox}" Margin="0,0,0,6"/>
+
+        <TextBlock Grid.Row="3" Grid.Column="0" x:Name="ArgsLabel" Text="参数" Style="{StaticResource AddLabel}" Margin="0,0,8,6"/>
+        <TextBox Grid.Row="3" Grid.Column="1" x:Name="ArgsBox" Style="{StaticResource AddBox}" Margin="0,0,0,6"/>
+
+        <TextBlock Grid.Row="4" Grid.Column="0" x:Name="WorkdirLabel" Text="工作目录" Style="{StaticResource AddLabel}" Margin="0,0,8,6"/>
+        <TextBox Grid.Row="4" Grid.Column="1" x:Name="WorkdirBox" Style="{StaticResource AddBox}" Margin="0,0,0,6"/>
+
+        <TextBlock Grid.Row="5" Grid.Column="1" x:Name="ErrorText" FontSize="{StaticResource Font.Size.Status}"
+                   Foreground="{StaticResource Brush.Danger}" Margin="0,0,0,6" TextTrimming="CharacterEllipsis"/>
+
+        <StackPanel Grid.Row="6" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="保存" Click="OnSave" FontSize="{StaticResource Font.Size.Primary}" Padding="14,4" Margin="0,0,8,0" Cursor="Hand" ClickMode="Press"/>
+            <Button Content="取消" IsCancel="True" FontSize="{StaticResource Font.Size.Primary}" Padding="14,4" Cursor="Hand"/>
+        </StackPanel>
+    </Grid>
+</Window>

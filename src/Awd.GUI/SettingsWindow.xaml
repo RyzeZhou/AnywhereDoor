@@ -1,0 +1,41 @@
+<Window x:Class="Awd.GUI.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置"
+        Width="380" SizeToContent="Height" MinWidth="340"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Brush.Surface}"
+        FontFamily="{StaticResource Font.Text}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <StackPanel Margin="12">
+        <TextBlock Text="打开方式" FontSize="{StaticResource Font.Size.Primary}"
+                   Foreground="{StaticResource Brush.Text.Secondary}" Margin="0,0,0,6"/>
+        <RadioButton x:Name="RbSingle" GroupName="openmode" Margin="0,2,0,2"
+                     FontSize="{StaticResource Font.Size.Primary}"
+                     Foreground="{StaticResource Brush.Text.Primary}"
+                     Checked="OnModeChanged">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="单击打开" VerticalAlignment="Center"/>
+                <TextBlock Text="　手机习惯，碰一下就跳" FontSize="{StaticResource Font.Size.Status}"
+                           Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </RadioButton>
+        <RadioButton x:Name="RbDouble" GroupName="openmode" Margin="0,2,0,2"
+                     FontSize="{StaticResource Font.Size.Primary}"
+                     Foreground="{StaticResource Brush.Text.Primary}"
+                     Checked="OnModeChanged">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="双击打开" VerticalAlignment="Center"/>
+                <TextBlock Text="　桌面习惯，单击只看目标" FontSize="{StaticResource Font.Size.Status}"
+                           Foreground="{StaticResource Brush.Text.Tertiary}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </RadioButton>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+            <Button Content="保存" Style="{StaticResource PrimaryButton}" Width="72" Margin="0,0,8,0" Click="OnSave"/>
+            <Button Content="取消" Style="{StaticResource GhostButton}" Width="60" IsCancel="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

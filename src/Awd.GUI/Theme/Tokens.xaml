@@ -1,0 +1,61 @@
+<!-- AWD 设计令牌：沿用 UniSearch 的密度纪律（Win11 美术 + Win10 密度），数值与其 Tokens.xaml 保持同族。
+     用户要求紧凑布局：正文 9pt、磁贴 84、标题栏 32、状态条 24，动效克制。 -->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- ── 字体 ───────────────────────────────────────────
+         末尾必须显式写中文字体：只写 Segoe UI 时 WPF 的中文回退会挑到日文字体（US 实测踩坑）。 -->
+    <FontFamily x:Key="Font.Text">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, SimSun</FontFamily>
+    <FontFamily x:Key="Glyph.Font">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- 字号（DIP，1pt = 1.333 DIP）。正文 12 = 9pt，与资源管理器同档；磁贴标签 11 = 8.25pt -->
+    <sys:Double x:Key="Font.Size.Primary">12</sys:Double>
+    <sys:Double x:Key="Font.Size.TileLabel">11</sys:Double>
+    <sys:Double x:Key="Font.Size.Title">13</sys:Double>
+    <sys:Double x:Key="Font.Size.Status">11.5</sys:Double>
+    <sys:Double x:Key="Font.Size.Glyph">14</sys:Double>
+
+    <!-- ── 尺寸 ─────────────────────────────────────────── -->
+    <sys:Double x:Key="Header.Height">32</sys:Double>
+    <sys:Double x:Key="Status.Height">24</sys:Double>
+    <!-- 行高要 GridLength 不是 Double：RowDefinition/ColumnDefinition 吃 Double 会抛
+         "'32'不是 Height 的有效值"（US Tokens.xaml 里记录过的实测坑，勿改回） -->
+    <GridLength x:Key="Row.Header">32</GridLength>
+    <GridLength x:Key="Row.Status">24</GridLength>
+    <sys:Double x:Key="Tile.Size">84</sys:Double>
+    <sys:Double x:Key="Tile.Icon">44</sys:Double>
+    <sys:Double x:Key="Tile.ListIcon">20</sys:Double>
+    <Thickness x:Key="Tile.Margin">3</Thickness>
+    <Thickness x:Key="Grid.Padding">8</Thickness>
+
+    <!-- ── 颜色（Win11 浅色，与 US 同值；大面积背景必须用不透明刷，叠加只给 hover/选中） ── -->
+    <SolidColorBrush x:Key="Brush.Surface"        Color="#FFF3F3F3" />
+    <SolidColorBrush x:Key="Brush.Surface.Card"   Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="Brush.Text.Primary"   Color="#FF1A1A1A" />
+    <SolidColorBrush x:Key="Brush.Text.Secondary" Color="#FF5D5D5D" />
+    <SolidColorBrush x:Key="Brush.Text.Tertiary"  Color="#FF8A8A8A" />
+    <SolidColorBrush x:Key="Brush.Stroke.Default" Color="#FFE0E0E0" />
+    <SolidColorBrush x:Key="Brush.Subtle.Hover"   Color="#14000000" />
+    <SolidColorBrush x:Key="Brush.Selection"      Color="#330067C0" />
+    <SolidColorBrush x:Key="Brush.Accent"         Color="#FF0067C0" />
+    <SolidColorBrush x:Key="Brush.Danger"         Color="#FFC4314B" />
+    <!-- 投放区的"拖过"高亮：脱离=强调蓝染底，删除=危险红染底 -->
+    <SolidColorBrush x:Key="Brush.Drop.Unfile"    Color="#330067C0" />
+    <SolidColorBrush x:Key="Brush.Drop.Delete"    Color="#33C4314B" />
+    <SolidColorBrush x:Key="Brush.Success"        Color="#FF1A7F4B" />
+    <!-- Fluent 卡片的悬停态：近白的强调色染底 + 强调色半透明描边 -->
+    <SolidColorBrush x:Key="Brush.Card.Hover"        Color="#FFF4F9FE" />
+    <SolidColorBrush x:Key="Brush.Card.Border.Hover" Color="#FF9CC3EC" />
+
+    <CornerRadius x:Key="Radius.Tile">8</CornerRadius>
+    <CornerRadius x:Key="Radius.Default">4</CornerRadius>
+
+    <!-- 磁贴悬停的悬浮阴影：平时不给（几十块磁贴常驻特效费 GPU），悬停才挂 -->
+    <DropShadowEffect x:Key="TileShadow" BlurRadius="10" ShadowDepth="2" Direction="270"
+                      Opacity="0.18" Color="#FF1A1A1A"/>
+
+    <Duration x:Key="Anim.Fast">0:0:0.08</Duration>
+
+</ResourceDictionary>

@@ -1,0 +1,10 @@
+bin/
+obj/
+artifacts/
+dist/
+*.user
+*.suo
+.vs/
+.zcode/
+TestResults/
+*.log

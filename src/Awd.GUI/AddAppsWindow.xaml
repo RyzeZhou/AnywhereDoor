@@ -1,0 +1,69 @@
+<Window x:Class="Awd.GUI.AddAppsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="添加应用"
+        Width="500" Height="560" MinWidth="420" MinHeight="380"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Brush.Surface}"
+        FontFamily="{StaticResource Font.Text}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+
+    <DockPanel Margin="8">
+        <!-- 搜索框：随输入即滤，和应用清单是同一份枚举 -->
+        <Border DockPanel.Dock="Top" Height="30" CornerRadius="{StaticResource Radius.Default}"
+                Background="{StaticResource Brush.Surface.Card}"
+                BorderBrush="{StaticResource Brush.Stroke.Default}" BorderThickness="1" Padding="8,0">
+            <DockPanel LastChildFill="True">
+                <TextBlock DockPanel.Dock="Left" Text="&#xE721;" FontFamily="{StaticResource Glyph.Font}"
+                           FontSize="12" Foreground="{StaticResource Brush.Text.Tertiary}"
+                           VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox x:Name="SearchBox" Style="{x:Null}" BorderThickness="0" Background="Transparent"
+                         Padding="0" VerticalContentAlignment="Center" FontSize="12"
+                         Foreground="{StaticResource Brush.Text.Primary}"
+                         SelectionBrush="{StaticResource Brush.Accent}"
+                         CaretBrush="{StaticResource Brush.Accent}"
+                         TextChanged="OnSearchChanged"/>
+            </DockPanel>
+        </Border>
+
+        <!-- 底部提示：左边操作反馈，右边命中数 -->
+        <Border DockPanel.Dock="Bottom" Margin="0,6,0,0">
+            <DockPanel LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" x:Name="HintText" VerticalAlignment="Center"
+                           FontSize="{StaticResource Font.Size.Status}"
+                           Foreground="{StaticResource Brush.Text.Secondary}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="双击添加；已收藏的项不再重复加"/>
+                <TextBlock DockPanel.Dock="Right" x:Name="HitText" VerticalAlignment="Center"
+                           FontSize="{StaticResource Font.Size.Status}"
+                           Foreground="{StaticResource Brush.Text.Tertiary}"/>
+            </DockPanel>
+        </Border>
+
+        <!-- 应用清单：ListBox 原生虚拟化，几百项无压力 -->
+        <ListBox x:Name="AppList" Background="Transparent" BorderThickness="0" Margin="0,8,0,0"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 MouseDoubleClick="OnListDoubleClick" PreviewKeyDown="OnListKeyDown">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <DockPanel Height="26" LastChildFill="False">
+                        <Grid DockPanel.Dock="Left" Width="{StaticResource Tile.ListIcon}"
+                              Height="{StaticResource Tile.ListIcon}" VerticalAlignment="Center">
+                            <TextBlock Text="&#xECA5;" FontFamily="{StaticResource Glyph.Font}" FontSize="12"
+                                       Foreground="{StaticResource Brush.Text.Tertiary}"/>
+                            <Image Source="{Binding Icon}" Stretch="Uniform"/>
+                        </Grid>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding OwnedText}" VerticalAlignment="Center"
+                                   Margin="8,0,4,0" FontSize="{StaticResource Font.Size.Status}"
+                                   Foreground="{StaticResource Brush.Success}"/>
+                        <TextBlock Text="{Binding App.Name}" VerticalAlignment="Center" Margin="8,0,8,0"
+                                   FontSize="{StaticResource Font.Size.Primary}"
+                                   Foreground="{StaticResource Brush.Text.Primary}"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </DockPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</Window>
