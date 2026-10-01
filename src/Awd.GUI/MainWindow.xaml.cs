@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     /// （双击打开失效的根因），提到 12px —— 故意拖拽不受影响，双击的手抖不再误触。</summary>
     private const double MinDragDistance = 12.0;
 
-    private const string UnfiledGroup = "(未分类)";
+    private const string UnfiledGroup = GroupStore.UnfiledName;   // 与 CLI 共用一份，别两边各写一遍
 
     private static readonly string[] TabTitles = { "程序", "本地", "网站", "远程" };
 
@@ -32,12 +32,6 @@ public partial class MainWindow : Window
     /// <summary>分组筛选谓词：null=全部；""=未分类；其他=分组名精确匹配。</summary>
     private static bool GroupMatch(string? group, string? match)
         => match == null || (match == "" ? string.IsNullOrEmpty(group) : group == match);
-
-    private static readonly (string Name, string Hex)[] Palette =
-    {
-        ("蓝", "#FF0078D4"), ("绿", "#FF107C10"), ("红", "#FFC42B1C"), ("橙", "#FFCA5010"),
-        ("黄", "#FFF7630C"), ("紫", "#FF8764B8"), ("青", "#FF038387"), ("灰", "#FF68768A"),
-    };
 
     /// <summary>侧栏条目：色条 + 名称（可带副行）+ 计数。Match 是筛选/选中语义值：
     /// null=全部，""=未分类，分组名，站点名。</summary>
@@ -862,12 +856,11 @@ public partial class MainWindow : Window
         }
 
         var color = new MenuItem { Header = "设置颜色" };
-        foreach (var (n, hex) in Palette)
+        foreach (var s in GroupPalette.Swatches)   // 预设与 CLI 的 --color 共用 Core 里那一份
         {
-            var mi = new MenuItem { Header = "■ " + n };
-            var br = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-            mi.Foreground = br;
-            mi.Click += (_, _) => ApplySideColor(page, item.Match!, hex);
+            var mi = new MenuItem { Header = $"■ {s.Zh} {s.En}" };
+            mi.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(s.Hex));
+            mi.Click += (_, _) => ApplySideColor(page, item.Match!, s.Hex);
             color.Items.Add(mi);
         }
         var reset = new MenuItem { Header = "■ 默认" };

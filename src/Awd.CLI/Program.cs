@@ -38,10 +38,26 @@ internal static class Program
                                                    批量探测：真实尺寸分档统计
               launch <目标|AUMID|@id>                           启动（打印通道与 PID）
               fav    add <目标|AUMID> [--name X] [--group G]    收藏管理
-                     list | move <id> <位置> | remove <id>
+                     [--page 程序|本地|网站|远程] [--kind 名]
+                     list [--page P] [--group G]
+                                                   无状态筛选：--group 日历 只看这组，- 表示未分类
+                     move <id> <页内位置>          位置是"该页内"的序号（与 GUI 摆放同一口径）
+                     group <id> <分组名|->         归组 / 脱离（等价于 GUI 把条目拖到侧栏）
+                     remove <id>
+              group  list [--page P]              分组登记表（含只在条目上出现过的）
+                     add <名称> [--page P]
+                     rename <旧> <新> [--page P]   连带改这些条目的归属
+                     remove <名称> [--page P]      条目回未分类，不删条目
+                     color <名称> <颜色|-> [--page P]
+                                                   颜色按中英对照预设名给，也收 #RRGGBB 或序号
+
+            颜色预设（GUI 右键色盘就是这十项，两边同名）：
+              1红red 2橙orange 3黄gold 4绿green 5青teal 6蓝blue 7紫purple 8粉hotpink 9棕brown 10灰gray
 
             目标写法：exe / .lnk 用完整路径；UWP 用 AUMID（形如 Xyz_hash!App）；
             @id 表示按收藏列表里的 id 引用。
+            页面写法：程序/programs/0，本地/local/1，网站/web/2，远程/remote/3。
+            注意：GUI 启动时才读这三个 JSON，CLI 改完要重启 GUI 才看得见。
             """);
         return 0;
     }
@@ -58,6 +74,7 @@ internal static class Program
             "icons" => CmdIcons(rest),
             "launch" => CmdLaunch(rest),
             "fav" => CmdFav(rest),
+            "group" => CmdGroup(rest),
             "help" or "--help" or "-h" => Usage(),
             _ => Unknown(cmd),
         };
@@ -178,7 +195,7 @@ internal static class Program
     {
         if (args.Length == 0)
         {
-            Console.Error.WriteLine("用法：awd fav add|list|move|remove ...（awd help 看参数）");
+            Console.Error.WriteLine("用法：awd fav add|list|move|group|remove ...（awd help 看参数）");
             return 1;
         }
 
@@ -203,35 +220,69 @@ internal static class Program
                     return 0;
                 }
 
-                // UWP 的显示名从应用清单里查，比裸 AUMID 好看
-                if (p.Option("name") == null)
+                var page = ParsePage(p.Option("page"));
+                entry.Page = page;
+                // 不写 --kind 时按页推：本地=文件夹、网站=web、远程=erf:；程序页沿用路径/AUMID 的形态猜测
+                entry.Kind = p.Option("kind") != null
+                    ? ParseKind(p.Option("kind")!)
+                    : page switch
+                    {
+                        PageKind.Local => AppKind.Folder,
+                        PageKind.Web => AppKind.Web,
+                        PageKind.Remote => AppKind.Remote,
+                        _ => entry.Kind,
+                    };
+
+                // UWP 的显示名从应用清单里查，比裸 AUMID 好看（只有程序页有这份清单）
+                if (p.Option("name") == null && page == PageKind.Programs)
                 {
                     var hit = FindInInventory(entry.Target);
                     if (hit != null) entry.Name = hit.Name;
                 }
                 entry.Name = p.Option("name") ?? entry.Name;
-                entry.Group = p.Option("group");
-                entry.Position = favs.Count == 0 ? 0 : favs.Max(f => f.Position) + 1;
-                entry.IconPath = TryCacheIcon(entry); // 添加时就提取图标，网格加载不用等
+                entry.Group = NormalizeGroup(p.Option("group"));
+                entry.Position = favs.Count(f => f.Page == page);   // 追加到该页末尾（页内 0 起）
+                entry.IconPath = page == PageKind.Programs ? TryCacheIcon(entry) : null;
 
                 favs.Add(entry);
+                RenumberByPage(favs);   // 新条目在该页列表末尾，顺手把这一页的序号归整
                 store.Save(favs);
-                Console.WriteLine($"已添加 [{entry.Id}] {entry.Name}（位置 {entry.Position}）");
+                Console.WriteLine($"已添加 [{entry.Id}] {entry.Name}（{PageLabel(page)} 第 {entry.Position} 位，" +
+                                  $"组={entry.Group ?? GroupStore.UnfiledName}）");
+                WarnIfUnregistered(entry.Page, entry.Group);
                 return 0;
             }
 
             case "list":
             {
-                if (favs.Count == 0)
+                var pageSpec = p.Option("page");
+                var groupSpec = p.Option("group");
+                IEnumerable<AppEntry> q = favs;
+                if (pageSpec != null) { var pg = ParsePage(pageSpec); q = q.Where(e => e.Page == pg); }
+                if (groupSpec != null)
                 {
-                    Console.WriteLine("收藏为空");
+                    var want = NormalizeGroup(groupSpec);
+                    q = want == null ? q.Where(e => string.IsNullOrEmpty(e.Group))
+                                     : q.Where(e => e.Group == want);
+                }
+
+                var list = q.OrderBy(e => e.Page).ThenBy(e => e.Position).ToList();
+                if (list.Count == 0)
+                {
+                    Console.WriteLine(groupSpec != null
+                        ? $"没有落在「{groupSpec}」的收藏（awd group list 看这页有哪些分组）"
+                        : "收藏为空");
                     return 0;
                 }
-                foreach (var f in favs.OrderBy(f => f.Position))
+                foreach (var f in list)
                 {
                     var icon = f.IconPath == null ? "" : "  [icon OK]";
-                    Console.WriteLine($"#{f.Position,-3} [{f.Id}] ({f.Kind}) {f.Name}  ←  {f.Target}{icon}");
+                    Console.WriteLine($"#{f.Position,-3} [{f.Id}] ({f.Kind}/{PageLabel(f.Page)}) {f.Name}" +
+                                      $"  ←  {f.Target}  组={f.Group ?? GroupStore.UnfiledName}{icon}");
                 }
+                var scope = (pageSpec != null ? PageLabel(ParsePage(pageSpec)) : "未限页") +
+                            (groupSpec != null ? $" × 「{groupSpec}」" : "");
+                Console.WriteLine($"共 {list.Count} 项（{scope}）");
                 return 0;
             }
 
@@ -240,15 +291,50 @@ internal static class Program
                 var id = p.Positional.ElementAtOrDefault(0)
                     ?? throw new InvalidOperationException("缺少 id");
                 var posText = p.Positional.ElementAtOrDefault(1)
-                    ?? throw new InvalidOperationException("缺少目标位置");
+                    ?? throw new InvalidOperationException("缺少目标位置（该页内的序号）");
                 var pos = int.Parse(posText);
 
-                var entry = TakeById(favs, id);
-                pos = Math.Clamp(pos, 0, favs.Count);
-                favs.Insert(pos, entry);
-                Renumber(favs);
+                var entry = favs.FirstOrDefault(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException($"收藏里没有 id={id}");
+                var pageSeq = favs.Where(e => e.Page == entry.Page).OrderBy(e => e.Position).ToList();
+                var from = pageSeq.IndexOf(entry);
+                pos = Math.Clamp(pos, 0, pageSeq.Count - 1);
+                if (pos == from)
+                {
+                    Console.WriteLine($"{entry.Name} 本来就在 {PageLabel(entry.Page)} 第 {pos} 位");
+                    return 0;
+                }
+
+                // 只在同一页里挪：先摘出来，再插到"该页第 pos 个邻居"之前
+                var rest = favs.Where(e => e != entry).ToList();
+                var neighbors = rest.Where(e => e.Page == entry.Page).ToList();
+                int at = pos < neighbors.Count ? rest.IndexOf(neighbors[pos]) : rest.Count;
+                rest.Insert(at, entry);
+                RenumberByPage(rest);
+                store.Save(rest);
+                Console.WriteLine($"已把 {entry.Name} 移到 {PageLabel(entry.Page)} 第 {pos} 位");
+                return 0;
+            }
+
+            case "group":
+            {
+                var id = p.Positional.ElementAtOrDefault(0)
+                    ?? throw new InvalidOperationException("缺少 id");
+                if (p.Positional.Count < 2)
+                    throw new InvalidOperationException("缺少分组名（要脱离就写 -）");
+                var entry = favs.FirstOrDefault(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException($"收藏里没有 id={id}");
+                var target = NormalizeGroup(p.Positional[1]);
+                var old = entry.Group;
+                if (old == target)
+                {
+                    Console.WriteLine($"「{entry.Name}」本来就在「{old ?? GroupStore.UnfiledName}」里");
+                    return 0;
+                }
+                entry.Group = target;
                 store.Save(favs);
-                Console.WriteLine($"已把 {entry.Name} 移到位置 {entry.Position}");
+                Console.WriteLine($"已把「{entry.Name}」从「{old ?? GroupStore.UnfiledName}」移到「{target ?? GroupStore.UnfiledName}」");
+                WarnIfUnregistered(entry.Page, entry.Group);
                 return 0;
             }
 
@@ -256,9 +342,157 @@ internal static class Program
             {
                 var id = p.Positional.FirstOrDefault()
                     ?? throw new InvalidOperationException("缺少 id");
-                var entry = TakeById(favs, id); // 内部已 Remove + Renumber
+                var entry = TakeById(favs, id); // 内部已 Remove + 重排
                 store.Save(favs);
                 Console.WriteLine($"已移除 {entry.Name}");
+                return 0;
+            }
+
+            default:
+                Console.Error.WriteLine($"未知子命令：{sub}");
+                return 1;
+        }
+    }
+
+    /// <summary>分组登记表：与 GUI 侧栏逐条同语义 —— 改名连带改条目、删除让条目回未分类、
+    /// 只在条目上出现过的名字也算分组（未登记，颜色中性）。</summary>
+    private static int CmdGroup(string[] args)
+    {
+        if (args.Length == 0)
+        {
+            Console.Error.WriteLine("用法：awd group list|add|rename|remove|color ...（awd help 看参数）");
+            return 1;
+        }
+
+        var sub = args[0].ToLowerInvariant();
+        var p = Parse(args.Skip(1).ToArray());
+        var page = (int)ParsePage(p.Option("page"));
+        var groups = GroupStore.Load();
+        var store = new FavoritesStore();
+        var favs = store.Load();
+        var onPage = favs.Where(e => (int)e.Page == page).ToList();
+
+        switch (sub)
+        {
+            case "list":
+            {
+                var reg = groups.Where(g => g.Page == page).ToList();
+                var names = reg.Select(g => g.Name)
+                    .Concat(onPage.Where(e => !string.IsNullOrEmpty(e.Group)).Select(e => e.Group!))
+                    .Distinct().ToList();
+                if (names.Count == 0)
+                {
+                    Console.WriteLine($"{PageLabel((PageKind)page)} 页还没有分组 —— " +
+                                      $"awd group add <名称> --page {PageLabel((PageKind)page)}");
+                    return 0;
+                }
+                foreach (var n in names)
+                {
+                    var def = reg.FirstOrDefault(g => g.Name == n);
+                    Console.WriteLine($"{n}  {onPage.Count(e => e.Group == n)} 项  " +
+                                      $"{GroupPalette.DisplayName(def?.Color)}" +
+                                      (def == null ? "  [未登记：只写在条目上]" : ""));
+                }
+                Console.WriteLine($"共 {names.Count} 个分组（{PageLabel((PageKind)page)} 页；" +
+                                  $"{GroupStore.UnfiledName} {onPage.Count(e => string.IsNullOrEmpty(e.Group))} 项）");
+                return 0;
+            }
+
+            case "add":
+            {
+                var name = Need(p, 0, "分组名称");
+                if (name == GroupStore.UnfiledName)
+                {
+                    Console.Error.WriteLine($"「{GroupStore.UnfiledName}」是未分类的占位名，不能当分组名");
+                    return 1;
+                }
+                if (groups.Any(g => g.Page == page && g.Name == name) || onPage.Any(e => e.Group == name))
+                {
+                    Console.Error.WriteLine($"分组「{name}」在 {PageLabel((PageKind)page)} 页已存在");
+                    return 1;
+                }
+                groups.Add(new GroupStore.GroupDef { Page = page, Name = name });
+                GroupStore.Save(groups);
+                Console.WriteLine($"已新建分组「{name}」（{PageLabel((PageKind)page)} 页，颜色中性）—— " +
+                                  $"归条目：awd fav group <id> \"{name}\"");
+                return 0;
+            }
+
+            case "rename":
+            {
+                var oldName = Need(p, 0, "旧分组名");
+                var newName = Need(p, 1, "新分组名");
+                if (newName == GroupStore.UnfiledName)
+                {
+                    Console.Error.WriteLine($"「{GroupStore.UnfiledName}」是未分类的占位名，不能当分组名");
+                    return 1;
+                }
+                if (oldName == newName) { Console.WriteLine("名字没变"); return 0; }
+                var hit = groups.FirstOrDefault(g => g.Page == page && g.Name == oldName);
+                var moved = onPage.Where(e => e.Group == oldName).ToList();
+                if (hit == null && moved.Count == 0)
+                {
+                    Console.Error.WriteLine($"{PageLabel((PageKind)page)} 页没有分组「{oldName}」（awd group list --page ... 看清单）");
+                    return 1;
+                }
+                if (groups.Any(g => g.Page == page && g.Name == newName) || onPage.Any(e => e.Group == newName))
+                {
+                    Console.Error.WriteLine($"分组「{newName}」已存在，改名会撞车");
+                    return 1;
+                }
+                if (hit != null) hit.Name = newName;
+                else groups.Add(new GroupStore.GroupDef { Page = page, Name = newName });   // 未登记的组改名后补登记，颜色仍中性
+                foreach (var e in moved) e.Group = newName;
+                GroupStore.Save(groups);
+                store.Save(favs);
+                Console.WriteLine($"分组已改名为「{newName}」（{PageLabel((PageKind)page)} 页，连带 {moved.Count} 条收藏）");
+                return 0;
+            }
+
+            case "remove":
+            {
+                var name = Need(p, 0, "分组名称");
+                var hit = groups.FirstOrDefault(g => g.Page == page && g.Name == name);
+                var freed = onPage.Where(e => e.Group == name).ToList();
+                if (hit == null && freed.Count == 0)
+                {
+                    Console.Error.WriteLine($"{PageLabel((PageKind)page)} 页没有分组「{name}」");
+                    return 1;
+                }
+                if (hit != null) groups.Remove(hit);
+                foreach (var e in freed) e.Group = null;   // 条目不删，回未分类
+                GroupStore.Save(groups);
+                store.Save(favs);
+                Console.WriteLine($"已删除分组「{name}」，{freed.Count} 条收藏回到未分类");
+                return 0;
+            }
+
+            case "color":
+            {
+                var name = Need(p, 0, "分组名称");
+                var colorSpec = Need(p, 1, "颜色名（或 - 清除）");
+                var def = groups.FirstOrDefault(g => g.Page == page && g.Name == name);
+                if (def == null && !onPage.Any(e => e.Group == name))
+                {
+                    Console.Error.WriteLine($"{PageLabel((PageKind)page)} 页没有分组「{name}」（先 awd group add）");
+                    return 1;
+                }
+                string? hex = null;
+                if (colorSpec != "-" && colorSpec != GroupStore.UnfiledName)
+                {
+                    var swatch = GroupPalette.Find(colorSpec)
+                        ?? throw new InvalidOperationException(
+                            $"不认识颜色「{colorSpec}」—— 用预设名（红/blue/…）、序号 1-{GroupPalette.Swatches.Length}，或 #RRGGBB");
+                    hex = swatch.Hex;
+                }
+                if (def == null)
+                {
+                    def = new GroupStore.GroupDef { Page = page, Name = name, Color = hex };
+                    groups.Add(def);
+                }
+                else def.Color = hex;
+                GroupStore.Save(groups);
+                Console.WriteLine($"分组「{name}」颜色 = {GroupPalette.DisplayName(def.Color)}");
                 return 0;
             }
 
@@ -275,15 +509,71 @@ internal static class Program
         var entry = favs.FirstOrDefault(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException($"收藏里没有 id={id}");
         favs.Remove(entry);
-        Renumber(favs);
+        RenumberByPage(favs);
         return entry;
     }
 
-    private static void Renumber(List<AppEntry> favs)
+    /// <summary>position 的口径与 GUI 的 Persist() 一致：**每页各自 0 起连续**，
+    /// 且以"列表里的先后"为准 —— 调用方（move/add）排好的顺序就是摆放顺序。
+    /// 早先是全局 0..N-1，GUI 与 CLI 对同一个字段两套理解；这里若改成按旧 Position 重排，
+    /// move 刚插好的位置会被立刻冲回原样（实测踩过）。</summary>
+    private static void RenumberByPage(List<AppEntry> favs)
     {
-        for (var i = 0; i < favs.Count; i++)
-            favs[i].Position = i;
+        foreach (var byPage in favs.GroupBy(e => e.Page))
+        {
+            var seq = byPage.ToList();
+            for (var i = 0; i < seq.Count; i++) seq[i].Position = i;
+        }
     }
+
+    private static string Need(Parsed p, int index, string what)
+        => p.Positional.Count > index && p.Positional[index].Length > 0
+            ? p.Positional[index]
+            : throw new InvalidOperationException($"缺少{what}");
+
+    /// <summary>--group 的取值：- / 空 / (未分类) 都表示"不在任何分组"。</summary>
+    private static string? NormalizeGroup(string? spec)
+        => string.IsNullOrEmpty(spec) || spec == "-" || spec == GroupStore.UnfiledName ? null : spec;
+
+    private static void WarnIfUnregistered(PageKind page, string? group)
+    {
+        if (group == null) return;
+        if (GroupStore.Load().Any(g => g.Page == (int)page && g.Name == group)) return;
+        Console.WriteLine($"  注：分组「{group}」未登记（侧栏照样显示，颜色中性）—— " +
+                          $"配色：awd group color \"{group}\" <颜色> --page {PageLabel(page)}");
+    }
+
+    private static PageKind ParsePage(string? spec)
+    {
+        if (spec == null) return PageKind.Programs;
+        return spec.Trim().ToLowerInvariant() switch
+        {
+            "0" or "programs" or "program" or "prog" or "app" or "程序" or "应用" => PageKind.Programs,
+            "1" or "local" or "本地" => PageKind.Local,
+            "2" or "web" or "网站" => PageKind.Web,
+            "3" or "remote" or "远程" => PageKind.Remote,
+            _ => throw new InvalidOperationException($"不认识页面「{spec}」（程序/本地/网站/远程，或 0-3）"),
+        };
+    }
+
+    private static string PageLabel(PageKind p) => p switch
+    {
+        PageKind.Programs => "程序",
+        PageKind.Local => "本地",
+        PageKind.Web => "网站",
+        _ => "远程",
+    };
+
+    private static AppKind ParseKind(string spec) => spec.Trim().ToLowerInvariant() switch
+    {
+        "lnk" => AppKind.Lnk,
+        "exe" => AppKind.Exe,
+        "uwp" => AppKind.Uwp,
+        "folder" or "目录" or "文件夹" => AppKind.Folder,
+        "web" or "网站" => AppKind.Web,
+        "remote" or "远程" => AppKind.Remote,
+        _ => throw new InvalidOperationException($"不认识类型「{spec}」（lnk/exe/uwp/folder/web/remote）"),
+    };
 
     /// <summary>按目标查应用清单，用于把 AUMID 换成人看的名字。</summary>
     private static AppEntry? FindInInventory(string target)
