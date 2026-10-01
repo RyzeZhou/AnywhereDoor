@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- windows10.0.19041.0： PackageManager/包 logo 走 WinRT 投影（UWP 图标去磁贴蓝底用），本机 19045 满足 -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <!-- 编译结果统一进仓库根的 dist\（用户要求，不留在 src 下）；Debug/Release 共用此目录，后构建覆盖 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\dist\Awd.Core\</OutputPath>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- UseWPF 仅为了用 PresentationCore 把 HBITMAP 编码成 PNG，本库不含任何 UI 代码 -->
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+</Project>

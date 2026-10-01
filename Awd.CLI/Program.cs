@@ -1,5 +1,7 @@
 using System.IO;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Awd.Core;
 
 namespace Awd.Cli;
@@ -51,13 +53,21 @@ internal static class Program
                      color <名称> <颜色|-> [--page P]
                                                    颜色按中英对照预设名给，也收 #RRGGBB 或序号
 
+            任意门地图（布局的载体：四页各自的分组/条目/配色/顺序，紧凑二进制）
+              map    list | show [地图名]                       扫 maps 目录 / 看整张布局
+                     new <名称> [--copy]  use <名称>            新建（--copy 复制当前）/ 切换
+                     rename <新名> | remove <名称>              改名（含当前）/ 删除
+                     export [地图名] --out x.json               导出给人看、可手改
+                     import --in x.json [--as 名称] | size      导入 / 体积对比
+
             颜色预设（GUI 右键色盘就是这十项，两边同名）：
               1红red 2橙orange 3黄gold 4绿green 5青teal 6蓝blue 7紫purple 8粉hotpink 9棕brown 10灰gray
 
             目标写法：exe / .lnk 用完整路径；UWP 用 AUMID（形如 Xyz_hash!App）；
             @id 表示按收藏列表里的 id 引用。
             页面写法：程序/programs/0，本地/local/1，网站/web/2，远程/remote/3。
-            注意：GUI 启动时才读这三个 JSON，CLI 改完要重启 GUI 才看得见。
+            数据落在 %APPDATA%\AnywhereDoor\maps\*.awdmap（当前哪张记在 settings.json）。
+            注意：GUI 启动时才读地图，CLI 改完要重启 GUI 才看得见。
             """);
         return 0;
     }
@@ -75,6 +85,7 @@ internal static class Program
             "launch" => CmdLaunch(rest),
             "fav" => CmdFav(rest),
             "group" => CmdGroup(rest),
+            "map" => CmdMap(rest),
             "help" or "--help" or "-h" => Usage(),
             _ => Unknown(cmd),
         };
@@ -90,11 +101,14 @@ internal static class Program
 
     private static int CmdPaths()
     {
-        Directory.CreateDirectory(FavoritesStore.DataDir);
+        var map = MapStore.OpenActive();
         Directory.CreateDirectory(IconCache.CacheDir);
-        Console.WriteLine($"收藏文件   {FavoritesStore.FilePath}");
-        Console.WriteLine($"图标缓存   {IconCache.CacheDir}");
-        Console.WriteLine("（两个目录已确保存在）");
+        Console.WriteLine($"地图目录     {MapStore.MapsDir}");
+        Console.WriteLine($"当前地图     {map.Name}  →  {MapStore.PathOf(map.Name)}");
+        Console.WriteLine($"偏好设置     {Path.Combine(MapStore.DataDir, "settings.json")}");
+        Console.WriteLine($"图标缓存     {IconCache.CacheDir}");
+        Console.WriteLine($"地图内容     {map.Entries.Count} 条收藏 / {map.MaterializedGroups().Count} 个分组 / " +
+                          $"{map.SiteColors.Count} 个站点配色");
         return 0;
     }
 
@@ -201,8 +215,8 @@ internal static class Program
 
         var sub = args[0].ToLowerInvariant();
         var p = Parse(args.Skip(1).ToArray());
-        var store = new FavoritesStore();
-        var favs = store.Load();
+        var map = MapStore.OpenActive();
+        var favs = map.Entries;
 
         switch (sub)
         {
@@ -246,10 +260,10 @@ internal static class Program
 
                 favs.Add(entry);
                 RenumberByPage(favs);   // 新条目在该页列表末尾，顺手把这一页的序号归整
-                store.Save(favs);
+                MapStore.Save(map);
                 Console.WriteLine($"已添加 [{entry.Id}] {entry.Name}（{PageLabel(page)} 第 {entry.Position} 位，" +
-                                  $"组={entry.Group ?? GroupStore.UnfiledName}）");
-                WarnIfUnregistered(entry.Page, entry.Group);
+                                  $"组={entry.Group ?? MapDoc.UnfiledName}）");
+                WarnIfUnregistered(map, entry.Page, entry.Group);
                 return 0;
             }
 
@@ -278,7 +292,7 @@ internal static class Program
                 {
                     var icon = f.IconPath == null ? "" : "  [icon OK]";
                     Console.WriteLine($"#{f.Position,-3} [{f.Id}] ({f.Kind}/{PageLabel(f.Page)}) {f.Name}" +
-                                      $"  ←  {f.Target}  组={f.Group ?? GroupStore.UnfiledName}{icon}");
+                                      $"  ←  {f.Target}  组={f.Group ?? MapDoc.UnfiledName}{icon}");
                 }
                 var scope = (pageSpec != null ? PageLabel(ParsePage(pageSpec)) : "未限页") +
                             (groupSpec != null ? $" × 「{groupSpec}」" : "");
@@ -311,7 +325,8 @@ internal static class Program
                 int at = pos < neighbors.Count ? rest.IndexOf(neighbors[pos]) : rest.Count;
                 rest.Insert(at, entry);
                 RenumberByPage(rest);
-                store.Save(rest);
+                map.Entries = rest;
+                MapStore.Save(map);
                 Console.WriteLine($"已把 {entry.Name} 移到 {PageLabel(entry.Page)} 第 {pos} 位");
                 return 0;
             }
@@ -328,13 +343,13 @@ internal static class Program
                 var old = entry.Group;
                 if (old == target)
                 {
-                    Console.WriteLine($"「{entry.Name}」本来就在「{old ?? GroupStore.UnfiledName}」里");
+                    Console.WriteLine($"「{entry.Name}」本来就在「{old ?? MapDoc.UnfiledName}」里");
                     return 0;
                 }
                 entry.Group = target;
-                store.Save(favs);
-                Console.WriteLine($"已把「{entry.Name}」从「{old ?? GroupStore.UnfiledName}」移到「{target ?? GroupStore.UnfiledName}」");
-                WarnIfUnregistered(entry.Page, entry.Group);
+                MapStore.Save(map);
+                Console.WriteLine($"已把「{entry.Name}」从「{old ?? MapDoc.UnfiledName}」移到「{target ?? MapDoc.UnfiledName}」");
+                WarnIfUnregistered(map, entry.Page, entry.Group);
                 return 0;
             }
 
@@ -343,7 +358,7 @@ internal static class Program
                 var id = p.Positional.FirstOrDefault()
                     ?? throw new InvalidOperationException("缺少 id");
                 var entry = TakeById(favs, id); // 内部已 Remove + 重排
-                store.Save(favs);
+                MapStore.Save(map);
                 Console.WriteLine($"已移除 {entry.Name}");
                 return 0;
             }
@@ -367,9 +382,9 @@ internal static class Program
         var sub = args[0].ToLowerInvariant();
         var p = Parse(args.Skip(1).ToArray());
         var page = (int)ParsePage(p.Option("page"));
-        var groups = GroupStore.Load();
-        var store = new FavoritesStore();
-        var favs = store.Load();
+        var map = MapStore.OpenActive();
+        var groups = map.Groups;
+        var favs = map.Entries;
         var onPage = favs.Where(e => (int)e.Page == page).ToList();
 
         switch (sub)
@@ -394,16 +409,16 @@ internal static class Program
                                       (def == null ? "  [未登记：只写在条目上]" : ""));
                 }
                 Console.WriteLine($"共 {names.Count} 个分组（{PageLabel((PageKind)page)} 页；" +
-                                  $"{GroupStore.UnfiledName} {onPage.Count(e => string.IsNullOrEmpty(e.Group))} 项）");
+                                  $"{MapDoc.UnfiledName} {onPage.Count(e => string.IsNullOrEmpty(e.Group))} 项）");
                 return 0;
             }
 
             case "add":
             {
                 var name = Need(p, 0, "分组名称");
-                if (name == GroupStore.UnfiledName)
+                if (name == MapDoc.UnfiledName)
                 {
-                    Console.Error.WriteLine($"「{GroupStore.UnfiledName}」是未分类的占位名，不能当分组名");
+                    Console.Error.WriteLine($"「{MapDoc.UnfiledName}」是未分类的占位名，不能当分组名");
                     return 1;
                 }
                 if (groups.Any(g => g.Page == page && g.Name == name) || onPage.Any(e => e.Group == name))
@@ -411,8 +426,8 @@ internal static class Program
                     Console.Error.WriteLine($"分组「{name}」在 {PageLabel((PageKind)page)} 页已存在");
                     return 1;
                 }
-                groups.Add(new GroupStore.GroupDef { Page = page, Name = name });
-                GroupStore.Save(groups);
+                groups.Add(new GroupDef { Page = page, Name = name });
+                MapStore.Save(map);
                 Console.WriteLine($"已新建分组「{name}」（{PageLabel((PageKind)page)} 页，颜色中性）—— " +
                                   $"归条目：awd fav group <id> \"{name}\"");
                 return 0;
@@ -422,9 +437,9 @@ internal static class Program
             {
                 var oldName = Need(p, 0, "旧分组名");
                 var newName = Need(p, 1, "新分组名");
-                if (newName == GroupStore.UnfiledName)
+                if (newName == MapDoc.UnfiledName)
                 {
-                    Console.Error.WriteLine($"「{GroupStore.UnfiledName}」是未分类的占位名，不能当分组名");
+                    Console.Error.WriteLine($"「{MapDoc.UnfiledName}」是未分类的占位名，不能当分组名");
                     return 1;
                 }
                 if (oldName == newName) { Console.WriteLine("名字没变"); return 0; }
@@ -441,10 +456,10 @@ internal static class Program
                     return 1;
                 }
                 if (hit != null) hit.Name = newName;
-                else groups.Add(new GroupStore.GroupDef { Page = page, Name = newName });   // 未登记的组改名后补登记，颜色仍中性
+                else groups.Add(new GroupDef { Page = page, Name = newName });   // 未登记的组改名后补登记，颜色仍中性
                 foreach (var e in moved) e.Group = newName;
-                GroupStore.Save(groups);
-                store.Save(favs);
+                MapStore.Save(map);
+                MapStore.Save(map);
                 Console.WriteLine($"分组已改名为「{newName}」（{PageLabel((PageKind)page)} 页，连带 {moved.Count} 条收藏）");
                 return 0;
             }
@@ -461,8 +476,8 @@ internal static class Program
                 }
                 if (hit != null) groups.Remove(hit);
                 foreach (var e in freed) e.Group = null;   // 条目不删，回未分类
-                GroupStore.Save(groups);
-                store.Save(favs);
+                MapStore.Save(map);
+                MapStore.Save(map);
                 Console.WriteLine($"已删除分组「{name}」，{freed.Count} 条收藏回到未分类");
                 return 0;
             }
@@ -478,7 +493,7 @@ internal static class Program
                     return 1;
                 }
                 string? hex = null;
-                if (colorSpec != "-" && colorSpec != GroupStore.UnfiledName)
+                if (colorSpec != "-" && colorSpec != MapDoc.UnfiledName)
                 {
                     var swatch = GroupPalette.Find(colorSpec)
                         ?? throw new InvalidOperationException(
@@ -487,11 +502,11 @@ internal static class Program
                 }
                 if (def == null)
                 {
-                    def = new GroupStore.GroupDef { Page = page, Name = name, Color = hex };
+                    def = new GroupDef { Page = page, Name = name, Color = hex };
                     groups.Add(def);
                 }
                 else def.Color = hex;
-                GroupStore.Save(groups);
+                MapStore.Save(map);
                 Console.WriteLine($"分组「{name}」颜色 = {GroupPalette.DisplayName(def.Color)}");
                 return 0;
             }
@@ -500,6 +515,175 @@ internal static class Program
                 Console.Error.WriteLine($"未知子命令：{sub}");
                 return 1;
         }
+    }
+
+    /// <summary>地图本身：扫描 / 查看 / 新建 / 切换 / 改名 / 删除 / 导出导入 / 体积。</summary>
+    private static int CmdMap(string[] args)
+    {
+        if (args.Length == 0)
+        {
+            Console.Error.WriteLine("用法：awd map list|show|new|use|rename|remove|export|import|size（awd help 看参数）");
+            return 1;
+        }
+
+        var sub = args[0].ToLowerInvariant();
+        var p = Parse(args.Skip(1).ToArray());
+        var settings = SettingsStore.Load();
+        var active = settings.ActiveMap;
+
+        switch (sub)
+        {
+            case "list":
+            {
+                var found = MapStore.Scan();
+                if (found.Count == 0)
+                {
+                    Console.WriteLine($"还没有地图 —— 目录 {MapStore.MapsDir} 是空的");
+                    return 0;
+                }
+                foreach (var f in found)
+                {
+                    var mark = f.Name == active ? "*" : " ";
+                    if (f.Error != null)
+                    {
+                        Console.WriteLine($"{mark} {f.Name,-16} 读不出来：{f.Error}（备份 {f.FilePath}.bak 可能还在）");
+                        continue;
+                    }
+                    var doc = MapStore.Load(f.Name);
+                    Console.WriteLine($"{mark} {f.Name,-16} {doc.Entries.Count} 条 / " +
+                                      $"{doc.MaterializedGroups().Count} 组  " +
+                                      $"{new FileInfo(f.FilePath).Length} 字节");
+                }
+                Console.WriteLine($"（* = 当前地图；awd map use <名称> 切换；目录 {MapStore.MapsDir}）");
+                return 0;
+            }
+
+            case "show":
+            {
+                var map = Named(p.Positional.FirstOrDefault()) ?? MapStore.OpenActive();
+                Console.WriteLine($"地图「{map.Name}」  {map.Entries.Count} 条收藏");
+                for (int page = 0; page < 4; page++)
+                {
+                    var entries = map.Entries.Where(e => (int)e.Page == page).OrderBy(e => e.Position).ToList();
+                    var groups = map.MaterializedGroups().Where(g => g.Page == page).ToList();
+                    Console.WriteLine();
+                    Console.WriteLine($"■ {PageLabel((PageKind)page)}  {entries.Count} 条 / {groups.Count} 组");
+                    foreach (var g in groups)
+                    {
+                        var inG = entries.Where(e => e.Group == g.Name).ToList();
+                        Console.WriteLine($"  ▸ {g.Name}  [{GroupPalette.DisplayName(g.Color)}]  {inG.Count} 条");
+                        foreach (var e in inG) Console.WriteLine($"      {e.Name}  ({e.Kind})  {e.Target}");
+                    }
+                    foreach (var e in entries.Where(x => string.IsNullOrEmpty(x.Group)))
+                        Console.WriteLine($"  · {e.Name}  ({e.Kind})  {e.Target}   ← {MapDoc.UnfiledName}");
+                }
+                if (map.SiteColors.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("■ 站点配色（远程页；站点清单来自易远传，只读）");
+                    foreach (var (site, hex) in map.SiteColors)
+                        Console.WriteLine($"  · {site}  [{GroupPalette.DisplayName(hex)}]");
+                }
+                return 0;
+            }
+
+            case "new":
+            {
+                var name = Need(p, 0, "地图名称");
+                var seed = p.Option("copy") != null ? MapStore.OpenActive() : null;
+                var doc = MapStore.Create(name, seed);
+                Console.WriteLine($"已{(seed != null ? "复制" : "新建")}地图「{name}」（{doc.Entries.Count} 条）—— " +
+                                  $"当前地图仍是「{active}」，要切过去：awd map use \"{name}\"");
+                return 0;
+            }
+
+            case "use":
+            {
+                var name = Need(p, 0, "地图名称");
+                if (!MapStore.Exists(name))
+                {
+                    Console.Error.WriteLine($"没有地图「{name}」（awd map list 看有什么）");
+                    return 1;
+                }
+                var doc = MapStore.Load(name);   // 顺手验一遍读得出来，别把指针指向坏图
+                settings.ActiveMap = name;
+                SettingsStore.Save(settings);
+                Console.WriteLine($"当前地图 = 「{name}」（{doc.Entries.Count} 条）");
+                Console.WriteLine("  注意：开着的 GUI 不监视文件，要重启才看得见这张。");
+                return 0;
+            }
+
+            case "rename":
+            {
+                var from = p.Positional.Count > 1 ? Need(p, 0, "旧名") : (active ?? throw new InvalidOperationException("还没有地图"));
+                var to = p.Positional.Count > 1 ? Need(p, 1, "新名") : Need(p, 0, "新名");
+                MapStore.Rename(from, to);
+                Console.WriteLine($"地图已改名为「{to}」");
+                return 0;
+            }
+
+            case "remove":
+            {
+                var name = Need(p, 0, "地图名称");
+                MapStore.Delete(name);
+                Console.WriteLine($"已删除地图「{name}」（连 .bak 一起）");
+                return 0;
+            }
+
+            case "export":
+            {
+                var outPath = p.Option("out") ?? p.Positional.ElementAtOrDefault(1)
+                    ?? throw new InvalidOperationException("缺少导出路径（--out 文件）");
+                var map = Named(p.Positional.FirstOrDefault()) ?? MapStore.OpenActive();
+                File.WriteAllText(outPath, map.ToJson());
+                Console.WriteLine($"已导出「{map.Name}」→ {outPath}（{new FileInfo(outPath).Length} 字节 JSON，可手改后 import 回来）");
+                return 0;
+            }
+
+            case "import":
+            {
+                var inPath = p.Option("in") ?? p.Positional.FirstOrDefault()
+                    ?? throw new InvalidOperationException("缺少导入文件（--in 文件）");
+                var name = p.Option("as") ?? Path.GetFileNameWithoutExtension(inPath);
+                var doc = MapStore.ImportJson(name, File.ReadAllText(inPath));
+                Console.WriteLine($"已导入为地图「{name}」（{doc.Entries.Count} 条 / " +
+                                  $"{doc.MaterializedGroups().Count} 组）—— 没动当前地图");
+                return 0;
+            }
+
+            case "size":
+            {
+                var map = MapStore.OpenActive();
+                var bin = map.ToBin();
+                var json = Encoding.UTF8.GetBytes(map.ToJson());
+                var legacy = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { version = 1, apps = map.Entries },
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                    }));
+                Console.WriteLine($"同一份内容（{map.Entries.Count} 条收藏 / {map.MaterializedGroups().Count} 个分组）：");
+                Console.WriteLine($"  地图二进制      {bin.Length,6} 字节   1.0×");
+                Console.WriteLine($"  地图 JSON 导出    {json.Length,6} 字节   {json.Length / (double)bin.Length:F2}×");
+                Console.WriteLine($"  老 favorites.json {legacy.Length,6} 字节   {legacy.Length / (double)bin.Length:F2}×");
+                return 0;
+            }
+
+            default:
+                Console.Error.WriteLine($"未知子命令：{sub}");
+                return 1;
+        }
+    }
+
+    /// <summary>按名字取地图（不存在则报清楚），供 show/export 用。</summary>
+    private static MapDoc? Named(string? name)
+    {
+        if (name == null) return null;
+        if (!MapStore.Exists(name)) throw new InvalidOperationException($"没有地图「{name}」（awd map list）");
+        return MapStore.Load(name);
     }
 
     // ================== 辅助 ==================
@@ -533,12 +717,12 @@ internal static class Program
 
     /// <summary>--group 的取值：- / 空 / (未分类) 都表示"不在任何分组"。</summary>
     private static string? NormalizeGroup(string? spec)
-        => string.IsNullOrEmpty(spec) || spec == "-" || spec == GroupStore.UnfiledName ? null : spec;
+        => string.IsNullOrEmpty(spec) || spec == "-" || spec == MapDoc.UnfiledName ? null : spec;
 
-    private static void WarnIfUnregistered(PageKind page, string? group)
+    private static void WarnIfUnregistered(MapDoc map, PageKind page, string? group)
     {
         if (group == null) return;
-        if (GroupStore.Load().Any(g => g.Page == (int)page && g.Name == group)) return;
+        if (map.Groups.Any(g => g.Page == (int)page && g.Name == group)) return;
         Console.WriteLine($"  注：分组「{group}」未登记（侧栏照样显示，颜色中性）—— " +
                           $"配色：awd group color \"{group}\" <颜色> --page {PageLabel(page)}");
     }
@@ -601,7 +785,7 @@ internal static class Program
         if (spec.StartsWith('@'))
         {
             var id = spec[1..];
-            var favs = new FavoritesStore().Load();
+            var favs = MapStore.OpenActive().Entries;
             return favs.FirstOrDefault(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidOperationException($"收藏里没有 id={id}");
         }

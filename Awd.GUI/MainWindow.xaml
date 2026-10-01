@@ -4,7 +4,7 @@
         xmlns:a="clr-namespace:Awd.GUI"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="任意门"
-        Width="640" Height="480" MinWidth="480" MinHeight="360"
+        Width="640" Height="480" MinWidth="600" MinHeight="360"
         WindowStartupLocation="CenterScreen"
         Background="{StaticResource Brush.Surface}"
         FontFamily="{StaticResource Font.Text}"
@@ -254,6 +254,21 @@
         <Border Grid.Row="0" Background="{StaticResource Brush.Surface.Card}"
                 BorderBrush="{StaticResource Brush.Stroke.Default}" BorderThickness="0,0,0,1">
             <DockPanel LastChildFill="False">
+                <!-- 地图选择器：四页的分组/条目/配色/顺序作为一个整体布局，可建多张随时切 -->
+                <DockPanel DockPanel.Dock="Left" Margin="8,0,10,0" VerticalAlignment="Center"
+                           shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Button DockPanel.Dock="Right" x:Name="MapAddBtn"
+                            Style="{StaticResource GhostButton}" Width="22" Height="22"
+                            Padding="0" Click="OnMapAddClick" ToolTip="新建地图（四页布局存成一个文件）">
+                        <TextBlock Text="&#xE710;" FontFamily="{StaticResource Glyph.Font}" FontSize="11"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Button>
+                    <ComboBox x:Name="MapCombo" Width="128" Height="22" VerticalContentAlignment="Center"
+                              FontSize="{StaticResource Font.Size.Status}"
+                              DisplayMemberPath="Display" SelectedValuePath="Name"
+                              SelectionChanged="OnMapSelected"
+                              ToolTip="当前地图：四页的分组/条目/配色/顺序作为一个整体布局"/>
+                </DockPanel>
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="2,0,0,0"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <RadioButton x:Name="Tab0" Style="{StaticResource TabStyle}" GroupName="pg"
@@ -286,17 +301,18 @@
                         </StackPanel>
                     </RadioButton>
                 </StackPanel>
-                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}"
-                        ToolTip="设置" Click="OnSettingsClick"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
-                    <TextBlock Text="&#xE713;" FontFamily="{StaticResource Glyph.Font}"
-                               FontSize="13" Foreground="{StaticResource Brush.Text.Secondary}"/>
-                </Button>
+                <!-- 关闭键在最右（用户点名）；设置在其左 -->
                 <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}"
                         ToolTip="关闭 (Esc)" Click="OnCloseClick"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <TextBlock Text="&#xE8BB;" FontFamily="{StaticResource Glyph.Font}"
                                FontSize="10" Foreground="{StaticResource Brush.Text.Secondary}"/>
+                </Button>
+                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}"
+                        ToolTip="设置" Click="OnSettingsClick"
+                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <TextBlock Text="&#xE713;" FontFamily="{StaticResource Glyph.Font}"
+                               FontSize="13" Foreground="{StaticResource Brush.Text.Secondary}"/>
                 </Button>
             </DockPanel>
         </Border>
@@ -306,8 +322,11 @@
             <!-- 程序页：左侧分组侧栏 + 右侧磁贴 -->
             <DockPanel x:Name="TilePage">
                 <Border x:Name="AddBarTile" DockPanel.Dock="Top" Style="{StaticResource AddBar}">
-                    <Button Content="从应用清单添加…" Style="{StaticResource GhostButton}"
-                            HorizontalAlignment="Left" Click="OnAddFromInventory"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="从应用清单添加…" Style="{StaticResource GhostButton}" Click="OnAddFromInventory"/>
+                        <Button Content="添加 exe 文件…" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                Click="OnAddExeFile" ToolTip="便携程序直接选 exe，不用进开始菜单"/>
+                    </StackPanel>
                 </Border>
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -369,12 +388,17 @@
                                             <StackPanel>
                                                 <Grid Height="{StaticResource Tile.Icon}" Width="{StaticResource Tile.Icon}"
                                                       HorizontalAlignment="Center" Margin="0,8,0,2">
+                                                    <!-- 图标底卡：白色小圆角 + 常驻轻阴影，透明底图标放上面有层次 -->
+                                                    <Border Background="{StaticResource Brush.Surface.Card}"
+                                                            BorderBrush="{StaticResource Brush.Stroke.Default}"
+                                                            BorderThickness="1" CornerRadius="4"
+                                                            Effect="{StaticResource TileIconShadow}"/>
                                                     <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
                                                                FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                Foreground="{StaticResource Brush.Text.Tertiary}"
-                                                               Visibility="{Binding PlaceholderVisibility}"/>
+                                                               Visibility="{Binding PlaceholderVisibility}" Margin="2"/>
                                                     <Image Source="{Binding IconImage}" Stretch="Uniform"
-                                                           Visibility="{Binding IconVisibility}"/>
+                                                           Visibility="{Binding IconVisibility}" Margin="2"/>
                                                 </Grid>
                                                 <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
                                                            Foreground="{StaticResource Brush.Text.Primary}"

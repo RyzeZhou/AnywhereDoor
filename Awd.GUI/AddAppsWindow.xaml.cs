@@ -44,7 +44,7 @@ public partial class AddAppsWindow : Window
 
     private static readonly SemaphoreSlim AddGate = new(1, 1);
 
-    private readonly FavoritesStore _store = new();
+    private readonly MapDoc _doc = MapStore.OpenActive();
     private List<AppEntry> _all = new();
     private List<Row> _rows = new();
     private HashSet<string> _ownedIds = new(StringComparer.OrdinalIgnoreCase);
@@ -58,7 +58,7 @@ public partial class AddAppsWindow : Window
         _all = AppInventory.EnumerateAll()
             .OrderBy(a => a.Name, StringComparer.CurrentCulture).ToList();
         _ownedIds = new HashSet<string>(
-            _store.Load().Select(f => f.Id), StringComparer.OrdinalIgnoreCase);
+            _doc.Entries.Select(f => f.Id), StringComparer.OrdinalIgnoreCase);
         ApplyFilter("");
         SearchBox.Focus();
     }
@@ -86,7 +86,7 @@ public partial class AddAppsWindow : Window
     {
         var id = AppEntry.MakeId(app.Target);
         if (SmallIconCache.TryGetValue(id, out var cached)) return cached;
-        var png = Path.Combine(IconCache.CacheDir, $"{id}_256.png");
+        var png = IconCache.PathFor(app.Target, 256);
         var img = TileVm.Decode(png, 20);
         SmallIconCache[id] = img;
         return img;
@@ -116,7 +116,7 @@ public partial class AddAppsWindow : Window
         await AddGate.WaitAsync();
         try
         {
-            var favs = _store.Load();
+            var favs = _doc.Entries;
             var id = AppEntry.MakeId(row.App.Target);
             if (favs.Any(f => f.Id.Equals(id, StringComparison.OrdinalIgnoreCase)))
             {
@@ -139,10 +139,8 @@ public partial class AddAppsWindow : Window
 
             try
             {
-                var png = Path.Combine(IconCache.CacheDir, $"{entry.Id}_256.png");
-                entry.IconPath = File.Exists(png)
-                    ? png
-                    : (await Task.Run(() => IconCache.Extract(row.App.Target, 256))).CachePath;
+                // Extract 自带缓存命中短路
+                entry.IconPath = (await Task.Run(() => IconCache.Extract(row.App.Target, 256))).CachePath;
             }
             catch (Exception ex)
             {
@@ -151,7 +149,7 @@ public partial class AddAppsWindow : Window
             }
 
             favs.Add(entry);
-            _store.Save(favs);
+            MapStore.Save(_doc);
             _ownedIds.Add(entry.Id);
             Changed = true;
             row.Owned = true;

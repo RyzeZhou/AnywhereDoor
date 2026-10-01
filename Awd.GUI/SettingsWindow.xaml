@@ -33,6 +33,18 @@
             </StackPanel>
         </RadioButton>
 
+        <Separator Margin="0,12,0,10"/>
+        <TextBlock Text="当前地图" FontSize="{StaticResource Font.Size.Primary}"
+                   Foreground="{StaticResource Brush.Text.Secondary}" Margin="0,0,0,6"/>
+        <DockPanel LastChildFill="False">
+            <Button DockPanel.Dock="Right" Content="重命名…" Style="{StaticResource GhostButton}"
+                    Click="OnRenameMap" ToolTip="改这张地图的名字（四页内容跟着一起）"/>
+            <TextBlock x:Name="MapNameText" VerticalAlignment="Center"
+                       FontSize="{StaticResource Font.Size.Primary}"
+                       Foreground="{StaticResource Brush.Text.Primary}"
+                       TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
             <Button Content="保存" Style="{StaticResource PrimaryButton}" Width="72" Margin="0,0,8,0" Click="OnSave"/>
             <Button Content="取消" Style="{StaticResource GhostButton}" Width="60" IsCancel="True"/>

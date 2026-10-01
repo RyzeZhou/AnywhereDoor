@@ -2,12 +2,15 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <AssemblyName>awd</AssemblyName>
     <RootNamespace>Awd.Cli</RootNamespace>
+    <!-- 编译结果统一进仓库根的 dist\（用户要求，不留在 src 下）；Debug/Release 共用此目录，后构建覆盖 -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\dist\Awd.CLI\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>

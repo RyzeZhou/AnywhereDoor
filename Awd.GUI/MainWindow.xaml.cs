@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     /// （双击打开失效的根因），提到 12px —— 故意拖拽不受影响，双击的手抖不再误触。</summary>
     private const double MinDragDistance = 12.0;
 
-    private const string UnfiledGroup = GroupStore.UnfiledName;   // 与 CLI 共用一份，别两边各写一遍
+    private const string UnfiledGroup = MapDoc.UnfiledName;   // 与 CLI 共用一份，别两边各写一遍
 
     private static readonly string[] TabTitles = { "程序", "本地", "网站", "远程" };
 
@@ -74,9 +74,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private readonly FavoritesStore _store = new();
-    private readonly AppSettingsStore.Settings _settings = AppSettingsStore.Load();
-    private List<GroupStore.GroupDef> _groups = GroupStore.Load();
+    /// <summary>当前打开的地图：条目、分组、站点配色都在它身上（MapStore 落盘）。</summary>
+    private MapDoc _doc = MapStore.OpenActive();
+    private readonly SettingsStore.Settings _settings = SettingsStore.Load();
 
     private readonly ObservableCollection<TileVm>[] _pages;
 
@@ -182,13 +182,83 @@ public partial class MainWindow : Window
 
     private void ReloadFromStore()
     {
+        _doc = MapStore.OpenActive(); // 对话框可能写过盘，重开拿最新
         foreach (var page in _pages) page.Clear();
-        foreach (var f in _store.Load().OrderBy(f => f.Position))
+        foreach (var f in _doc.Entries.OrderBy(f => f.Position))
             _pages[(int)f.Page].Add(new TileVm(f));
         RefreshChrome();
         foreach (var page in _pages)
             foreach (var t in page)
                 LoadIconAsync(t);
+        RebuildMapCombo();
+    }
+
+    // ================== 地图（四页布局的整体，可建多张随时切） ==================
+
+    private bool _mapComboRebuilding;
+
+    private void RebuildMapCombo()
+    {
+        if (MapCombo == null) return;
+        _mapComboRebuilding = true;
+        try
+        {
+            // 读不出的地图照样列出（显示名标注），选它时尝试 Load —— .bak 能救就顺手救活
+            MapCombo.ItemsSource = MapStore.Scan()
+                .Select(f => new MapOpt(f.Name, f.Error != null ? f.Name + "（读不出）" : f.Name)).ToList();
+            MapCombo.SelectedValue = _doc.Name;
+        }
+        finally
+        {
+            _mapComboRebuilding = false;
+        }
+    }
+
+    private sealed record MapOpt(string Name, string Display);
+
+    private void OnMapSelected(object sender, SelectionChangedEventArgs e)
+    {
+        if (_mapComboRebuilding) return;
+        if (MapCombo.SelectedValue is not string name) return;
+        if (name == _doc.Name) return;
+        SwitchMap(name);
+    }
+
+    private void SwitchMap(string name)
+    {
+        try
+        {
+            _doc = MapStore.Load(name);
+            MapStore.Save(_doc); // 顺手治愈：主文件零化但 .bak 在的地图，切换即写回合法二进制
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"切换失败：{ex.Message}", warn: true);
+            RebuildMapCombo();
+            return;
+        }
+        var s = SettingsStore.Load();
+        s.ActiveMap = name;
+        SettingsStore.Save(s);
+        ReloadFromStore();
+        SetStatus($"已切换到地图「{name}」");
+    }
+
+    private void OnMapAddClick(object sender, RoutedEventArgs e)
+    {
+        var dlg = new NamePromptWindow("新建地图", "地图名称（四页的分组/条目/配色/顺序存成一个文件）：");
+        if (dlg.ShowDialog() != true) return;
+        var name = dlg.Value;
+        try
+        {
+            MapStore.Create(name, null); // 空白地图；要副本用 CLI 的 export/import
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"新建失败：{ex.Message}", warn: true);
+            return;
+        }
+        SwitchMap(name);
     }
 
     /// <summary>按各页视觉顺序重排 Position 并整体落盘（UI 线程专用）。</summary>
@@ -203,7 +273,8 @@ public partial class MainWindow : Window
                 all.Add(_pages[p][i].Entry);
             }
         }
-        _store.Save(all);
+        _doc.Entries = all;      // 地图二进制按数组先后存顺序
+        MapStore.Save(_doc);
         RefreshChrome();
     }
 
@@ -263,11 +334,11 @@ public partial class MainWindow : Window
     /// <summary>后台线程用的持久化：只合并单个条目，不碰 UI 集合。</summary>
     private void PersistEntry(AppEntry entry)
     {
-        var favs = _store.Load();
-        var idx = favs.FindIndex(f => f.Id.Equals(entry.Id, StringComparison.OrdinalIgnoreCase));
+        var doc = MapStore.OpenActive();
+        var idx = doc.Entries.FindIndex(f => f.Id.Equals(entry.Id, StringComparison.OrdinalIgnoreCase));
         if (idx < 0) return;
-        favs[idx] = entry;
-        _store.Save(favs);
+        doc.Entries[idx] = entry;
+        MapStore.Save(doc);
     }
 
     private async void LoadIconAsync(TileVm tile)
@@ -668,14 +739,14 @@ public partial class MainWindow : Window
                     s.Name,
                     _pages[3].Count(t => SiteOf(t.Entry.Target) == s.Name),
                     s.Name,
-                    _settings.SiteColors != null && _settings.SiteColors.TryGetValue(s.Name, out var c) ? c : null,
+                    _doc.SiteColors != null && _doc.SiteColors.TryGetValue(s.Name, out var c) ? c : null,
                     isSite: true,
                     subLabel: $"{s.Type}://{s.Host}")).ToList();
             }
             else
             {
                 var src = _pages[page];
-                var registry = _groups.Where(g => g.Page == page).ToList();
+                var registry = _doc.Groups.Where(g => g.Page == page).ToList();
                 var dataNames = src.Select(t => t.Entry.Group)
                     .Where(g => !string.IsNullOrEmpty(g)).Select(g => g!).Distinct().ToList();
                 var names = registry.Select(g => g.Name).Concat(dataNames).Distinct().ToList();
@@ -738,14 +809,14 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() != true) return;
         var name = dlg.Value;
         if (name == UnfiledGroup) { SetStatus("这个名字留给了未分类", warn: true); return; }
-        if (_groups.Any(g => g.Page == page && g.Name == name) ||
+        if (_doc.Groups.Any(g => g.Page == page && g.Name == name) ||
             _pages[page].Any(t => t.Entry.Group == name))
         {
             SetStatus($"分组「{name}」已存在", warn: true);
             return;
         }
-        _groups.Add(new GroupStore.GroupDef { Page = page, Name = name });
-        GroupStore.Save(_groups);
+        _doc.Groups.Add(new GroupDef { Page = page, Name = name });
+        MapStore.Save(_doc);
         if (page == 0) _tileSideFilter = name;
         else _sideGroupFilter = name;
         RebuildSideList(page);
@@ -886,16 +957,16 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() != true) return;
         var name = dlg.Value;
         if (name == oldName) return;
-        if (_groups.Any(g => g.Page == page && g.Name == name))
+        if (_doc.Groups.Any(g => g.Page == page && g.Name == name))
         {
             SetStatus($"分组「{name}」已存在", warn: true);
             return;
         }
-        foreach (var g in _groups.Where(g => g.Page == page && g.Name == oldName))
+        foreach (var g in _doc.Groups.Where(g => g.Page == page && g.Name == oldName))
             g.Name = name;
         foreach (var t in _pages[page].Where(t => t.Entry.Group == oldName))
             t.Entry.Group = name;
-        GroupStore.Save(_groups);
+        MapStore.Save(_doc);
         Persist();
         ReloadFromStore();
         SetStatus($"分组已改名为「{name}」");
@@ -903,8 +974,8 @@ public partial class MainWindow : Window
 
     private void DeleteGroup(int page, string name)
     {
-        _groups.RemoveAll(g => g.Page == page && g.Name == name);
-        GroupStore.Save(_groups);
+        _doc.Groups.RemoveAll(g => g.Page == page && g.Name == name);
+        MapStore.Save(_doc);
         foreach (var t in _pages[page].Where(t => t.Entry.Group == name))
             t.Entry.Group = null; // 条目不删，回未分类
         Persist();
@@ -916,24 +987,23 @@ public partial class MainWindow : Window
     {
         if (page == 3)
         {
-            _settings.SiteColors ??= new Dictionary<string, string>();
-            if (hex == null) _settings.SiteColors.Remove(match);
-            else _settings.SiteColors[match] = hex;
-            AppSettingsStore.Save(_settings);
+            if (hex == null) _doc.SiteColors.Remove(match);
+            else _doc.SiteColors[match] = hex;
+            MapStore.Save(_doc);
         }
         else
         {
-            var def = _groups.FirstOrDefault(g => g.Page == page && g.Name == match);
+            var def = _doc.Groups.FirstOrDefault(g => g.Page == page && g.Name == match);
             if (def == null)
             {
-                def = new GroupStore.GroupDef { Page = page, Name = match, Color = hex };
-                _groups.Add(def);
+                def = new GroupDef { Page = page, Name = match, Color = hex };
+                _doc.Groups.Add(def);
             }
             else
             {
                 def.Color = hex;
             }
-            GroupStore.Save(_groups);
+            MapStore.Save(_doc);
         }
         RebuildSideList(page);
     }
@@ -966,7 +1036,7 @@ public partial class MainWindow : Window
     {
         if (MenuTile(sender) is not { } vm || PageOf(vm) is not { } page) return;
         int p = Array.IndexOf(_pages, page);
-        var groups = _groups.Where(g => g.Page == p).Select(g => g.Name)
+        var groups = _doc.Groups.Where(g => g.Page == p).Select(g => g.Name)
             .Concat(_pages[p].Select(t => t.Entry.Group).Where(g => !string.IsNullOrEmpty(g)).Select(g => g!))
             .Concat(vm.Entry.Group != null ? new[] { vm.Entry.Group } : Array.Empty<string>())
             .Distinct();
@@ -1014,6 +1084,20 @@ public partial class MainWindow : Window
             ReloadFromStore();
             SetStatus("收藏已更新");
         }
+    }
+
+    /// <summary>直接选 exe 入收藏（便携程序没有开始菜单 lnk，清单里枚举不到）。</summary>
+    private void OnAddExeFile(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "选择要收藏的 exe（便携程序直接选文件）",
+            Filter = "程序|*.exe|所有文件|*.*",
+        };
+        if (dlg.ShowDialog(this) != true) return;
+        var path = dlg.FileName;
+        var name = Path.GetFileNameWithoutExtension(path);
+        AddEntry(PageKind.Programs, AppKind.Exe, path, name); // 工作目录留空 = 启动时默认 exe 所在目录
     }
 
     private void OnAddFolder(object sender, RoutedEventArgs e)
@@ -1148,10 +1232,18 @@ public partial class MainWindow : Window
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
-        var dlg = new SettingsWindow(_settings) { Owner = this };
+        var dlg = new SettingsWindow(_settings, _doc.Name) { Owner = this };
         dlg.ShowDialog();
         if (dlg.DialogResult != true) return;
         _settings.DoubleClickOpen = dlg.Result.DoubleClickOpen;
+        SettingsStore.Save(_settings);
+        if (dlg.RenamedMapTo != null)
+        {
+            _doc.Name = dlg.RenamedMapTo;
+            ReloadFromStore();
+            SetStatus($"地图已改名为「{dlg.RenamedMapTo}」");
+            return;
+        }
         SetStatus(_settings.DoubleClickOpen
             ? "已改为双击打开 —— 单击只看目标"
             : "已改为单击打开 —— 手机习惯");

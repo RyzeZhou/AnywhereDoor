@@ -40,4 +40,19 @@ public sealed class AppEntry
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(target.Trim().ToLowerInvariant()));
         return Convert.ToHexString(bytes, 0, 4).ToLowerInvariant();
     }
+
+    /// <summary>换地图时的副本。id 与 iconPath 都是 target 的函数，照抄即可。</summary>
+    public AppEntry Clone() => new()
+    {
+        Id = Id,
+        Name = Name,
+        Kind = Kind,
+        Page = Page,
+        Target = Target,
+        Arguments = Arguments,
+        WorkingDir = WorkingDir,
+        Group = Group,
+        Position = Position,
+        IconPath = IconPath,
+    };
 }

@@ -1,6 +1,6 @@
 # 任意门 AWD（Anywhere Door）· 规划
 
-> 状态：**P0 后端已写码**（2026-09-29：Awd.Core + Awd.CLI 完成，本机未编译；待 win10_vm 按 [TESTS.md](TESTS.md) 验证）
+> 状态：**0.1 Alpha 已发布**（2026-10-01：Core + CLI + GUI 可用，见 [README](../README.md)；本文写于 P0 规划期，阶段方向仍有效）
 > 日期：2026-09-29 ｜ 缩写 **AWD**
 
 ## 一句话定位

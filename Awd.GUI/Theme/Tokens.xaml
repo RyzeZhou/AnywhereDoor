@@ -55,6 +55,9 @@
     <!-- 磁贴悬停的悬浮阴影：平时不给（几十块磁贴常驻特效费 GPU），悬停才挂 -->
     <DropShadowEffect x:Key="TileShadow" BlurRadius="10" ShadowDepth="2" Direction="270"
                       Opacity="0.18" Color="#FF1A1A1A"/>
+    <!-- 图标底卡的常驻轻阴影：比磁贴阴影浅一档，只给"层次"不给"悬浮" -->
+    <DropShadowEffect x:Key="TileIconShadow" BlurRadius="5" ShadowDepth="1" Direction="270"
+                      Opacity="0.14" Color="#FF1A1A1A"/>
 
     <Duration x:Key="Anim.Fast">0:0:0.08</Duration>
 
