@@ -104,7 +104,7 @@ Windows 在这个位置是**真空**：同类工具（Flow Launcher、PowerToys 
 | **P1** | 托盘 + 全局热键 + 输入框 |
 | **P2** | 本地 / 网站 两页 |
 | **P3** | 远程页（接 ERF 的 `erf:` 协议） |
-| **P4** | 与文件管理器集成（快捷键直达共用收藏）—— **2026-09-30 待重议：用户判断 explorer 没有合适的接口** |
+| **P4** | 与文件管理器集成（快捷键直达共用收藏）—— **2026-10-01 待重议：用户判断 explorer 没有合适的接口** |
 
 ## 待定
 
@@ -142,7 +142,7 @@ Windows 在这个位置是**真空**：同类工具（Flow Launcher、PowerToys 
   现在只在没人判过（`!e.Handled`）时才给默认值。构建 0 错 0 警告；
   染底/描边/热压过选中已用 `PrintWindow` + 逐像素取证（见笔记 `AWD-2026-09-30-04`）。
   **仍需人工实测**：高亮时机、禁止光标、松手后的状态条 —— 拖拽无法自动化。
-- **2026-09-30 分组侧栏"点不动"（真根因，v8.1）**：`SideContainer` 里的 `<Setter Property="Focusable" Value="False"/>`
+- **2026-10-01 分组侧栏"点不动"（真根因，v8.1）**：`SideContainer` 里的 `<Setter Property="Focusable" Value="False"/>`
   让侧栏**从 v1 起就没被鼠标点选过** —— WPF `ListBoxItem` 的选择逻辑是
   `if (Selector.UiGetIsSelectable(this) && Focus())`，不可聚焦时 `Focus()` 返回 false，整段选择被跳过。
   改成不设 `Focusable`（默认可聚焦）+ `IsTabStop=False`（保住 Tab 顺序与初始焦点）+ `FocusVisualStyle={x:Null}`
@@ -153,8 +153,8 @@ Windows 在这个位置是**真空**：同类工具（Flow Launcher、PowerToys 
 - **环境事实（重要）**：本机 DSH 会话不在交互式窗口站（`GetCursorPos`/`SetCursorPos` 均返回 False，
   `GetForegroundWindow` 为 0）——**合成鼠标输入不可用，拖拽与右键菜单类交互无法自动化**，只能人工验证；
   静态渲染验证可用 `PrintWindow` + UIA 驱动按钮/输入/选择。
-  **但 `PrintWindow` 通道会随会话显示状态失效**：2026-09-30 晚同一台机、同一个 exe，
+  **但 `PrintWindow` 通道会随会话显示状态失效**：2026-10-01 中午同一台机、同一个 exe（距上一轮 13 小时，机器重登过、进程 DPI 从 175% 变 125%），
   先前 flag=2 出图正常，稍后再抓就 flag=2 全黑、flag=0/1 全白（窗口 `IsWindowVisible=True`、
-  `IsIconic=False`，UIA 照常读到内容），同时进程 DPI 从 175% 变成 125% ——
+  `IsIconic=False`，UIA 照常读到内容），——
   **抓不到图先怀疑采集通道，别判"应用没渲染"**；这时能用的验证只剩 UIA 属性与文本。
 - 未动：托盘 / 全局热键（P1）。
