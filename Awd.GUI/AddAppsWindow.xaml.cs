@@ -44,7 +44,8 @@ public partial class AddAppsWindow : Window
 
     private static readonly SemaphoreSlim AddGate = new(1, 1);
 
-    private readonly MapDoc _doc = MapStore.OpenActive();
+    private readonly MapDoc _doc;
+    private readonly string _docPath;   // 写回主窗口正在用的那个文件，不按名字猜
     private List<AppEntry> _all = new();
     private List<Row> _rows = new();
     private HashSet<string> _ownedIds = new(StringComparer.OrdinalIgnoreCase);
@@ -52,8 +53,10 @@ public partial class AddAppsWindow : Window
     /// <summary>有没有新增过收藏；主窗口据此决定要不要重载。</summary>
     public bool Changed { get; private set; }
 
-    public AddAppsWindow()
+    public AddAppsWindow(MapDoc doc, string path)
     {
+        _doc = doc;
+        _docPath = path;
         InitializeComponent();
         _all = AppInventory.EnumerateAll()
             .OrderBy(a => a.Name, StringComparer.CurrentCulture).ToList();
@@ -149,7 +152,7 @@ public partial class AddAppsWindow : Window
             }
 
             favs.Add(entry);
-            MapStore.Save(_doc);
+            MapStore.SaveTo(_doc, _docPath);
             _ownedIds.Add(entry.Id);
             Changed = true;
             row.Owned = true;

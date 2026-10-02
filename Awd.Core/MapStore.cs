@@ -59,12 +59,21 @@ public static class MapStore
         return list;
     }
 
-    public static bool Exists(string mapName) => File.Exists(PathOf(mapName));
+    public static bool Exists(string mapName) => Locate(mapName) != null;
 
-    public static MapDoc Load(string mapName)
+    /// <summary>
+    /// 名字 → 文件。**先按扫描结果匹配**：地图名存在文件里，文件名只是落点，
+    /// 手工改过文件名之后两者会分家 —— 只按名字拼路径就找不到刚扫到的那张。
+    /// </summary>
+    private static string? Locate(string mapName)
+        => Scan().FirstOrDefault(f => f.Name == mapName)?.FilePath
+           ?? (File.Exists(PathOf(mapName)) ? PathOf(mapName) : null);
+
+    /// <summary>读**指定文件**（同样有 .bak 回退）。窗口只该盯着自己打开的那一张 ——
+    /// 跟着"活动指针"跑的话，别人把指针改走或那张图坏了，本窗口会连启动一起崩。</summary>
+    public static MapDoc LoadFrom(string path)
     {
-        var path = PathOf(mapName);
-        if (!File.Exists(path)) throw new FileNotFoundException($"没有地图「{mapName}」");
+        if (!File.Exists(path)) throw new FileNotFoundException($"地图文件不见了：{path}");
         try
         {
             return MapDoc.FromBin(File.ReadAllBytes(path));
@@ -77,21 +86,38 @@ public static class MapStore
                 try
                 {
                     var doc = MapDoc.FromBin(File.ReadAllBytes(bak));
-                    doc.Name = mapName;
+                    if (string.IsNullOrWhiteSpace(doc.Name))
+                        doc.Name = Path.GetFileNameWithoutExtension(path);
                     return doc;
                 }
                 catch { /* 备份也坏了，往下抛 */ }
             }
             throw new InvalidDataException(
-                $"地图「{mapName}」读不出来（{ex.Message}），备份也不可用 —— 已保留原文件未做任何修改，请手工检查 {path}");
+                $"地图文件读不出来（{ex.Message}），备份也不可用 —— 已保留原文件未做任何修改：{path}");
         }
+    }
+
+    public static MapDoc Load(string mapName) => Load(mapName, out _);
+
+    /// <summary>读地图，并说清读的是哪个文件 —— 切换时"顺手治愈"要写回**刚读的这一个**，
+    /// 不能按名字猜路径（猜错就是把内容写进另一张图，坏的那张仍然坏着）。</summary>
+    public static MapDoc Load(string mapName, out string loadedFrom)
+    {
+        loadedFrom = Locate(mapName) ?? throw new FileNotFoundException($"没有地图「{mapName}」");
+        var doc = LoadFrom(loadedFrom);
+        doc.Name = mapName;     // 身份跟着用户选的名字走，Save/治愈才落回同一个文件
+        return doc;
     }
 
     /// <summary>原子写：.tmp → 上一版转存 .bak → 替换。任何一步失败都不会让原文件变成半截。</summary>
     public static void Save(MapDoc doc)
     {
         Directory.CreateDirectory(MapsDir);
-        var path = PathOf(doc.Name);
+        SaveTo(doc, PathOf(doc.Name));
+    }
+
+    public static void SaveTo(MapDoc doc, string path)
+    {
         var tmp = path + ".tmp";
         File.WriteAllBytes(tmp, doc.ToBin());
         if (File.Exists(path))
@@ -137,8 +163,7 @@ public static class MapStore
     {
         if (SettingsStore.Load().ActiveMap == mapName)
             throw new InvalidOperationException($"「{mapName}」是当前地图，先切到别的再删");
-        var path = PathOf(mapName);
-        if (!File.Exists(path)) throw new FileNotFoundException($"没有地图「{mapName}」");
+        var path = Locate(mapName) ?? throw new FileNotFoundException($"没有地图「{mapName}」");
         File.Delete(path);
         if (File.Exists(path + ".bak")) File.Delete(path + ".bak");
     }
@@ -161,7 +186,9 @@ public static class MapStore
     /// 打开当前地图。三种起步情况一次处理：老仓库还在就先迁移成「默认地图」；
     /// 什么都没有就建一张空的；指针指向的地图不见了（被删/被改名）就落到扫到的第一张。
     /// </summary>
-    public static MapDoc OpenActive()
+    public static MapDoc OpenActive() => OpenActive(out _);
+
+    public static MapDoc OpenActive(out string loadedFrom)
     {
         var settings = SettingsStore.Load();
         var found = Scan();
@@ -171,6 +198,7 @@ public static class MapStore
             settings = SettingsStore.Load();      // 迁移会把老 settings.json 改名留档，重读一次
             settings.ActiveMap = migrated.Name;
             SettingsStore.Save(settings);
+            loadedFrom = PathOf(migrated.Name);
             return migrated;
         }
         var name = found.Any(f => f.Name == settings.ActiveMap) ? settings.ActiveMap! : found[0].Name;
@@ -179,7 +207,49 @@ public static class MapStore
             settings.ActiveMap = name;
             SettingsStore.Save(settings);
         }
-        return Load(name);
+        return Load(name, out loadedFrom);
+    }
+
+    /// <summary>
+    /// 启动用取图。<see cref="OpenActive"/> 读不出来时**换一张能读的**，把话说清楚后照常开工：
+    /// 断电把 .awdmap 零化过真实发生过（见笔记 AWD-2026-10-01-02），而"双击没反应、也没有任何提示"
+    /// 是最坏的结局 —— 尤其这是一扇"门"，打不开就等于程序消失。
+    /// **不改活动指针**：那是用户的意图，坏文件修好后重启就回来了。一张都读不出来才返回 false。
+    /// </summary>
+    public static bool TryOpenActive(out MapDoc? doc, out string path, out string note)
+    {
+        try
+        {
+            doc = OpenActive(out path);
+            note = "";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            var wanted = SettingsStore.Load().ActiveMap;
+            // 备选按"最近写过"排：正在用的那张通常就是最新的那张。
+            // 早先按目录名顺序取第一张，实测会挑中一张空白的测试图，把用户真正在用的那张留在身后。
+            // 不按 Scan 的 Error 过滤 —— 主文件坏了但 .bak 完好的图，Load 能救回来，照样是好候选。
+            var candidates = Scan().Where(f => f.Name != wanted)
+                .OrderByDescending(f => File.GetLastWriteTimeUtc(f.FilePath))
+                .ToList();
+            foreach (var f in candidates)
+            {
+                try
+                {
+                    doc = Load(f.Name, out path);
+                    note = $"地图「{wanted}」读不出来（{ex.Message}）\n" +
+                           $"本次先打开「{doc.Name}」；修好原文件后重启就切回去。当前地图指针没有改。";
+                    return true;
+                }
+                catch { path = ""; /* 这张也坏了，接着找 */ }
+            }
+            doc = null;
+            path = "";
+            note = $"地图「{wanted}」读不出来（{ex.Message}），其余地图也都不行。\n" +
+                   $"没有改动任何文件 —— 请检查目录：{MapsDir}";
+            return false;
+        }
     }
 
     // ================== 老仓库迁移 ==================

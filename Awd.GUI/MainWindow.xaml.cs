@@ -74,8 +74,10 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>当前打开的地图：条目、分组、站点配色都在它身上（MapStore 落盘）。</summary>
-    private MapDoc _doc = MapStore.OpenActive();
+    /// <summary>当前打开的地图：条目、分组、站点配色都在它身上（MapStore 落盘）。
+    /// 由 App 在确认"读得出来"之后传进来 —— 别在这里做 IO，构造里抛异常等于启动消失。</summary>
+    private MapDoc _doc;
+    private string _docPath = "";   // 本窗口只认这一个文件：活动指针被别人改走、或另一张图坏了，都不该牵连我
     private readonly SettingsStore.Settings _settings = SettingsStore.Load();
 
     private readonly ObservableCollection<TileVm>[] _pages;
@@ -100,8 +102,10 @@ public partial class MainWindow : Window
     private Image? _ghost;           // 跟随光标的半透明条目副本
     private ListBoxItem? _hotSide;   // 拖拽期间被点亮的侧栏落点
 
-    public MainWindow()
+    public MainWindow(MapDoc doc, string path)
     {
+        _doc = doc;
+        _docPath = path;
         InitializeComponent();
         _pages = new ObservableCollection<TileVm>[4]
         {
@@ -128,6 +132,8 @@ public partial class MainWindow : Window
 
         LoadSites();
         ReloadFromStore();
+        // 启动时活动地图坏了、临时换了一张 —— 得在状态条上说清楚，别让人以为地图凭空变了
+        if (App.StartupNote.Length > 0) SetStatus(App.StartupNote, warn: true);
     }
 
     /// <summary>Win11 的圆角窗口；Win10 无此属性，安静退化直角+描边。</summary>
@@ -180,9 +186,20 @@ public partial class MainWindow : Window
 
     // ================== 数据 ==================
 
+    /// <summary>落盘只写本窗口打开的那一个文件。按 doc.Name 猜路径，会在"文件名与内嵌名分家"时
+    /// 写到别处去 —— 刚读回来的那张坏图没被治好，还凭空多出一张。</summary>
+    private void SaveDoc() => MapStore.SaveTo(_doc, _docPath);
+
+
     private void ReloadFromStore()
     {
-        _doc = MapStore.OpenActive(); // 对话框可能写过盘，重开拿最新
+        // 对话框（添加清单/设置）可能写过盘，重读一次拿最新 —— 但只重读**自己那个文件**。
+        // 这里原先是 OpenActive()：活动地图坏了就把主窗口构造连带炸掉，双击启动的人只看到"没反应"。
+        try { _doc = MapStore.LoadFrom(_docPath); }
+        catch (Exception ex)
+        {
+            SetStatus($"地图文件重读失败，先用内存里的内容（改动没丢）：{ex.Message}", warn: true);
+        }
         foreach (var page in _pages) page.Clear();
         foreach (var f in _doc.Entries.OrderBy(f => f.Position))
             _pages[(int)f.Page].Add(new TileVm(f));
@@ -228,8 +245,11 @@ public partial class MainWindow : Window
     {
         try
         {
-            _doc = MapStore.Load(name);
-            MapStore.Save(_doc); // 顺手治愈：主文件零化但 .bak 在的地图，切换即写回合法二进制
+            _doc = MapStore.Load(name, out var loadedFrom);
+            _docPath = loadedFrom;
+            // 顺手治愈：主文件坏了但 .bak 完好的地图，Load 已经回退成功 —— 写回**刚读的那个文件**，
+            // 下一次切换就把它修好了。按 doc.Name 猜路径不行：文件名与内嵌名分家时会写到别处去。
+            MapStore.SaveTo(_doc, loadedFrom);
         }
         catch (Exception ex)
         {
@@ -274,7 +294,7 @@ public partial class MainWindow : Window
             }
         }
         _doc.Entries = all;      // 地图二进制按数组先后存顺序
-        MapStore.Save(_doc);
+        SaveDoc();
         RefreshChrome();
     }
 
@@ -331,14 +351,15 @@ public partial class MainWindow : Window
         CountText.Text = $"{TabTitles[_tab]} {count} 项";
     }
 
-    /// <summary>后台线程用的持久化：只合并单个条目，不碰 UI 集合。</summary>
+    /// <summary>图标缓存落好后补一笔：改内存里这张地图再整体落盘（在 UI 线程上，await 回来还在调度器里）。
+    /// 原先每次提取都重新 OpenActive() —— 那等于"扫一遍 maps 目录 + 读全图 + 写全图 + 写 bak"，
+    /// 装机首启几十个图标就是几十轮全量读写，纯属白花。</summary>
     private void PersistEntry(AppEntry entry)
     {
-        var doc = MapStore.OpenActive();
-        var idx = doc.Entries.FindIndex(f => f.Id.Equals(entry.Id, StringComparison.OrdinalIgnoreCase));
+        var idx = _doc.Entries.FindIndex(f => f.Id.Equals(entry.Id, StringComparison.OrdinalIgnoreCase));
         if (idx < 0) return;
-        doc.Entries[idx] = entry;
-        MapStore.Save(doc);
+        _doc.Entries[idx] = entry;
+        SaveDoc();
     }
 
     private async void LoadIconAsync(TileVm tile)
@@ -816,7 +837,7 @@ public partial class MainWindow : Window
             return;
         }
         _doc.Groups.Add(new GroupDef { Page = page, Name = name });
-        MapStore.Save(_doc);
+        SaveDoc();
         if (page == 0) _tileSideFilter = name;
         else _sideGroupFilter = name;
         RebuildSideList(page);
@@ -966,7 +987,7 @@ public partial class MainWindow : Window
             g.Name = name;
         foreach (var t in _pages[page].Where(t => t.Entry.Group == oldName))
             t.Entry.Group = name;
-        MapStore.Save(_doc);
+        SaveDoc();
         Persist();
         ReloadFromStore();
         SetStatus($"分组已改名为「{name}」");
@@ -975,7 +996,7 @@ public partial class MainWindow : Window
     private void DeleteGroup(int page, string name)
     {
         _doc.Groups.RemoveAll(g => g.Page == page && g.Name == name);
-        MapStore.Save(_doc);
+        SaveDoc();
         foreach (var t in _pages[page].Where(t => t.Entry.Group == name))
             t.Entry.Group = null; // 条目不删，回未分类
         Persist();
@@ -989,7 +1010,7 @@ public partial class MainWindow : Window
         {
             if (hex == null) _doc.SiteColors.Remove(match);
             else _doc.SiteColors[match] = hex;
-            MapStore.Save(_doc);
+            SaveDoc();
         }
         else
         {
@@ -1003,7 +1024,7 @@ public partial class MainWindow : Window
             {
                 def.Color = hex;
             }
-            MapStore.Save(_doc);
+            SaveDoc();
         }
         RebuildSideList(page);
     }
@@ -1077,7 +1098,7 @@ public partial class MainWindow : Window
 
     private void OnAddFromInventory(object sender, RoutedEventArgs e)
     {
-        var dlg = new AddAppsWindow { Owner = this };
+        var dlg = new AddAppsWindow(_doc, _docPath) { Owner = this };
         dlg.ShowDialog();
         if (dlg.Changed)
         {
@@ -1240,6 +1261,7 @@ public partial class MainWindow : Window
         if (dlg.RenamedMapTo != null)
         {
             _doc.Name = dlg.RenamedMapTo;
+            _docPath = MapStore.PathOf(dlg.RenamedMapTo);   // Rename 已把文件挪到新落点
             ReloadFromStore();
             SetStatus($"地图已改名为「{dlg.RenamedMapTo}」");
             return;
