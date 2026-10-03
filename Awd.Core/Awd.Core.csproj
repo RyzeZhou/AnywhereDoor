@@ -5,7 +5,8 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <!-- 编译结果统一进仓库根的 dist\（用户要求，不留在 src 下）；Debug/Release 共用此目录，后构建覆盖 -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\dist\Awd.Core\</OutputPath>
+    <!-- 三个工程共用同一个 dist\：交付一体，GUI/CLI/核心同目录（用户要求：不分三块） -->
+    <OutputPath>..\dist\</OutputPath>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- UseWPF 仅为了用 PresentationCore 把 HBITMAP 编码成 PNG，本库不含任何 UI 代码 -->

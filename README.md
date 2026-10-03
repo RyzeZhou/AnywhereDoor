@@ -35,7 +35,7 @@
 
 1. 解压到任意目录
 2. 先装 **[.NET 8 Desktop Runtime（x64）](https://dotnet.microsoft.com/download/dotnet/8.0)**（只跑不编，装 Runtime 即可）
-3. 运行 `awd-gui\awd-gui.exe`；命令行用 `awd-cli\awd.exe`
+3. 运行 `awd-gui.exe`（图形界面）；命令行用**同目录**的 `awd.exe` —— 两个入口一体交付，操作同一份数据：人用 GUI，脚本 / 智能体用 CLI
 
 数据都在用户目录（卸载程序不丢）：
 
@@ -52,9 +52,11 @@
 Windows + [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)：
 
 ```
-dotnet build Awd.GUI -c Release   # 界面 → dist\Awd.GUI\awd-gui.exe
-dotnet build Awd.CLI -c Release   # 命令行 → dist\Awd.CLI\awd.exe
+dotnet build Awd.GUI -c Release   # 界面 → dist\awd-gui.exe
+dotnet build Awd.CLI -c Release   # 命令行 → dist\awd.exe
 ```
+
+三个工程统一产出到**同一个** `dist\`：`awd-gui.exe` 与 `awd.exe` 同目录，共用一份 `Awd.Core.dll` —— 软件本体一体，不分块。
 
 ## 命令行速查
 
@@ -79,7 +81,7 @@ AnywhereDoor/
   Awd.CLI/    命令行驱动（awd.exe）
   Awd.GUI/    WPF 界面（awd-gui.exe）
   docs/       设计与测试文档（P0 期存档）
-  dist/       本机构建产物（不入库）
+  dist/       软件本体（一体交付）：awd-gui.exe + awd.exe + 共用 dll（不入库）
 ```
 
 ## 与易远传（ERF）的关系

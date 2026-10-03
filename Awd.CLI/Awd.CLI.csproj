@@ -10,7 +10,8 @@
     <RootNamespace>Awd.Cli</RootNamespace>
     <!-- 编译结果统一进仓库根的 dist\（用户要求，不留在 src 下）；Debug/Release 共用此目录，后构建覆盖 -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\dist\Awd.CLI\</OutputPath>
+    <!-- 三个工程共用同一个 dist\：交付一体，awd.exe 与 awd-gui.exe 同目录（用户要求：不分三块） -->
+    <OutputPath>..\dist\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
