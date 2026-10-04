@@ -1303,20 +1303,22 @@ public partial class MainWindow : Window
     //    结案后移除本段与 Diag* 字段。 ──
     private static readonly string[] DiagFonts =
     {
-        "Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, SimSun", // 现行栈
-        "Microsoft YaHei UI, Microsoft YaHei, Segoe UI",                                 // 雅黑UI优先
+        "Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, SimSun", // 现行栈（Variable 在前）
+        "Segoe UI, Microsoft YaHei UI, Microsoft YaHei",                                 // 静态 Segoe UI，去掉 Variable
+        "Microsoft YaHei UI, Microsoft YaHei, Segoe UI",                                 // 雅黑UI优先（FSY 同款）
         "Microsoft YaHei",                                                               // 主机"新雅黑"裸渲
         "SimSun",                                                                        // 换字体文件对照
     };
-    private static readonly string[] DiagFontNames = { "现行栈", "雅黑UI优先", "仅雅黑", "宋体", "系统默认" };
+    private static readonly string[] DiagFontNames = { "现行栈", "静态Segoe", "雅黑UI优先", "仅雅黑", "宋体", "系统默认" };
     private int _diagFont = 0;
     private bool _diagIdeal = false;   // false=Display（默认）
     private bool _diagGray = false;    // false=ClearType（默认）
 
     private void DiagShow()
     {
+        double dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this).PixelsPerDip;
         SetStatus($"诊断：字体={DiagFontNames[_diagFont]} · 格式={(_diagIdeal ? "Ideal" : "Display")} · " +
-                  $"渲染={(_diagGray ? "Auto" : "ClearType")}（F9 字体 / F10 格式 / F11 渲染）");
+                  $"渲染={(_diagGray ? "Auto" : "ClearType")} · DPI={dpi:F2}（F9 字体 / F10 格式 / F11 渲染）");
     }
 
     private void SetStatus(string text, bool warn = false)
