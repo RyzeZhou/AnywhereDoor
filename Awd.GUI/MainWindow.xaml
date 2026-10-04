@@ -552,6 +552,22 @@
                 <TextBlock DockPanel.Dock="Right" x:Name="CountText" Margin="8,0,10,0"
                            VerticalAlignment="Center" FontSize="{StaticResource Font.Size.Status}"
                            Foreground="{StaticResource Brush.Text.Tertiary}"/>
+                <!-- 文字渲染诊断入口（临时，结案移除）：鼠标驱动，不依赖 F 键是否被键盘媒体层拦截 -->
+                <Button DockPanel.Dock="Right" x:Name="DiagButton" Content="诊断" Margin="8,0,6,0"
+                        Cursor="Hand" Focusable="False" Click="OnDiagClick">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <TextBlock x:Name="t" Text="{TemplateBinding Content}" VerticalAlignment="Center"
+                                       FontSize="{StaticResource Font.Size.Status}"
+                                       Foreground="{StaticResource Brush.Text.Tertiary}"/>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="t" Property="Foreground" Value="{StaticResource Brush.Accent}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
                 <TextBlock x:Name="StatusText" Margin="10,0,8,0" VerticalAlignment="Center"
                            FontSize="{StaticResource Font.Size.Status}"
                            Foreground="{StaticResource Brush.Text.Secondary}"
