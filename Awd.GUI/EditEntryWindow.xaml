@@ -6,8 +6,7 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Brush.Surface}"
         FontFamily="{StaticResource Font.Text}"
-        UseLayoutRounding="True" SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Grid Margin="10">
         <Grid.ColumnDefinitions>

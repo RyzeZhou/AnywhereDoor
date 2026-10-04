@@ -6,8 +6,7 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Brush.Surface}"
         FontFamily="{StaticResource Font.Text}"
-        UseLayoutRounding="True" SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <StackPanel Margin="12">
         <TextBlock Text="打开方式" FontSize="{StaticResource Font.Size.Primary}"

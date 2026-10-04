@@ -6,8 +6,7 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Brush.Surface}"
         FontFamily="{StaticResource Font.Text}"
-        UseLayoutRounding="True" SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <DockPanel Margin="8">
         <!-- 搜索框：随输入即滤，和应用清单是同一份枚举 -->

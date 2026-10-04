@@ -6,8 +6,7 @@
         WindowStartupLocation="CenterOwner"
         Background="{StaticResource Brush.Surface}"
         FontFamily="{StaticResource Font.Text}"
-        UseLayoutRounding="True" SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display">
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <DockPanel Margin="8" LastChildFill="True">
         <!-- 来源：自动探测到的浏览器 + 导出的 HTML 文件 -->
