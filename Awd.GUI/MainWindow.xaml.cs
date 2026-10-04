@@ -1276,6 +1276,47 @@ public partial class MainWindow : Window
     private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape) Close();
+        else if (e.Key == Key.F9)
+        {
+            _diagFont = (_diagFont + 1) % DiagFontNames.Length;
+            if (_diagFont >= DiagFonts.Length) ClearValue(FontFamilyProperty);   // 系统默认
+            else FontFamily = new System.Windows.Media.FontFamily(DiagFonts[_diagFont]);
+            DiagShow(); e.Handled = true;
+        }
+        else if (e.Key == Key.F10)
+        {
+            _diagIdeal = !_diagIdeal;
+            TextOptions.SetTextFormattingMode(this,
+                _diagIdeal ? TextFormattingMode.Ideal : TextFormattingMode.Display);
+            DiagShow(); e.Handled = true;
+        }
+        else if (e.Key == Key.F11)
+        {
+            _diagGray = !_diagGray;
+            TextOptions.SetTextRenderingMode(this,
+                _diagGray ? TextRenderingMode.Auto : TextRenderingMode.ClearType);
+            DiagShow(); e.Handled = true;
+        }
+    }
+
+    // ── 文字渲染现场诊断（临时）：主机上"字不清晰"而 VM 清晰，三变量逐一现场排除。
+    //    结案后移除本段与 Diag* 字段。 ──
+    private static readonly string[] DiagFonts =
+    {
+        "Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, SimSun", // 现行栈
+        "Microsoft YaHei UI, Microsoft YaHei, Segoe UI",                                 // 雅黑UI优先
+        "Microsoft YaHei",                                                               // 主机"新雅黑"裸渲
+        "SimSun",                                                                        // 换字体文件对照
+    };
+    private static readonly string[] DiagFontNames = { "现行栈", "雅黑UI优先", "仅雅黑", "宋体", "系统默认" };
+    private int _diagFont = 0;
+    private bool _diagIdeal = false;   // false=Display（默认）
+    private bool _diagGray = false;    // false=ClearType（默认）
+
+    private void DiagShow()
+    {
+        SetStatus($"诊断：字体={DiagFontNames[_diagFont]} · 格式={(_diagIdeal ? "Ideal" : "Display")} · " +
+                  $"渲染={(_diagGray ? "Auto" : "ClearType")}（F9 字体 / F10 格式 / F11 渲染）");
     }
 
     private void SetStatus(string text, bool warn = false)
