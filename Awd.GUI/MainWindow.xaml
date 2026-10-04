@@ -31,13 +31,26 @@
             <Setter Property="BorderBrush" Value="{StaticResource Brush.Stroke.Default}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Effect" Value="{x:Null}"/>
+            <!-- 特效不挂在这层：DropShadow 会把整棵子树栅格化成灰阶（ClearType 集体失效），
+                 标签文字必须留在特效外 —— 阴影改由背景层 TileShadowLayer 专管。 -->
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource Brush.Card.Hover}"/>
                     <Setter Property="BorderBrush" Value="{StaticResource Brush.Card.Border.Hover}"/>
-                    <Setter Property="Effect" Value="{StaticResource TileShadow}"/>
                 </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 阴影背景层：唯一携带 TileShadow 的元素，只画卡片底色不装内容，
+             文字/图标作为其兄弟在上层照常 ClearType。 -->
+        <Style x:Key="TileShadowLayer" TargetType="Border">
+            <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
+            <Setter Property="Effect" Value="{x:Null}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, ElementName=tileRoot}" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Brush.Card.Hover}"/>
+                    <Setter Property="Effect" Value="{StaticResource TileShadow}"/>
+                </DataTrigger>
             </Style.Triggers>
         </Style>
 
@@ -370,7 +383,8 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Style="{StaticResource TileStyle}"
+                                        <Border x:Name="tileRoot"
+                                                Style="{StaticResource TileStyle}"
                                                 PreviewMouseLeftButtonDown="OnTileMouseDown"
                                                 MouseMove="OnTileMouseMove"
                                                 PreviewMouseLeftButtonUp="OnTileMouseUp">
@@ -385,27 +399,30 @@
                                                     <MenuItem Header="移除收藏" Click="OnMenuRemove"/>
                                                 </ContextMenu>
                                             </Border.ContextMenu>
-                                            <StackPanel>
-                                                <Grid Height="{StaticResource Tile.Icon}" Width="{StaticResource Tile.Icon}"
-                                                      HorizontalAlignment="Center" Margin="0,8,0,2">
-                                                    <!-- 图标底卡：白色小圆角 + 常驻轻阴影，透明底图标放上面有层次 -->
-                                                    <Border Background="{StaticResource Brush.Surface.Card}"
-                                                            BorderBrush="{StaticResource Brush.Stroke.Default}"
-                                                            BorderThickness="1" CornerRadius="4"
-                                                            Effect="{StaticResource TileIconShadow}"/>
-                                                    <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
-                                                               FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                               Foreground="{StaticResource Brush.Text.Tertiary}"
-                                                               Visibility="{Binding PlaceholderVisibility}" Margin="2"/>
-                                                    <Image Source="{Binding IconImage}" Stretch="Uniform"
-                                                           Visibility="{Binding IconVisibility}" Margin="2"/>
-                                                </Grid>
-                                                <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
-                                                           Foreground="{StaticResource Brush.Text.Primary}"
-                                                           TextAlignment="Center" TextWrapping="Wrap"
-                                                           MaxHeight="30" TextTrimming="CharacterEllipsis"
-                                                           Margin="2,0,2,0"/>
-                                            </StackPanel>
+                                            <Grid>
+                                                <Border Style="{StaticResource TileShadowLayer}"/>
+                                                <StackPanel>
+                                                    <Grid Height="{StaticResource Tile.Icon}" Width="{StaticResource Tile.Icon}"
+                                                          HorizontalAlignment="Center" Margin="0,8,0,2">
+                                                        <!-- 图标底卡：白色小圆角 + 常驻轻阴影，透明底图标放上面有层次 -->
+                                                        <Border Background="{StaticResource Brush.Surface.Card}"
+                                                                BorderBrush="{StaticResource Brush.Stroke.Default}"
+                                                                BorderThickness="1" CornerRadius="4"
+                                                                Effect="{StaticResource TileIconShadow}"/>
+                                                        <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
+                                                                   FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Foreground="{StaticResource Brush.Text.Tertiary}"
+                                                                   Visibility="{Binding PlaceholderVisibility}" Margin="2"/>
+                                                        <Image Source="{Binding IconImage}" Stretch="Uniform"
+                                                               Visibility="{Binding IconVisibility}" Margin="2"/>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
+                                                               Foreground="{StaticResource Brush.Text.Primary}"
+                                                               TextAlignment="Center" TextWrapping="Wrap"
+                                                               MaxHeight="30" TextTrimming="CharacterEllipsis"
+                                                               Margin="2,0,2,0"/>
+                                                </StackPanel>
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>

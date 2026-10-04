@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
+    <!-- 每显示器 DPI 原生渲染（治主机多屏混合缩放下文字发虚） -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
