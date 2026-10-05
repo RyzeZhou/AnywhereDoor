@@ -10,6 +10,8 @@ namespace Awd.GUI;
 
 public partial class AddAppsWindow : Window
 {
+    /// <summary>清单行图标槽位的 DIP 尺寸，与 Theme/Tokens.xaml 的 Tile.ListIcon 保持一致。</summary>
+    private const double ListIconDip = 20;
     /// <summary>清单行：图标只从缓存读（20px 小图），不在列表里做 COM 提取 —— 提取只发生在"添加"那一刻。</summary>
     private sealed class Row : INotifyPropertyChanged
     {
@@ -90,7 +92,8 @@ public partial class AddAppsWindow : Window
         var id = AppEntry.MakeId(app.Target);
         if (SmallIconCache.TryGetValue(id, out var cached)) return cached;
         var png = IconCache.PathFor(app.Target, 256);
-        var img = TileVm.Decode(png, 20);
+        // 列表行槽位 20 DIP（Tile.ListIcon），同样要按 DPI 换算成物理像素再解码
+        var img = TileVm.Decode(png, DpiScale.ToPixels(ListIconDip));
         SmallIconCache[id] = img;
         return img;
     }

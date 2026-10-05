@@ -29,6 +29,9 @@ public partial class MainWindow : Window
     /// <summary>图标提取并发闸：COM 提取不便宜，别让几十块磁贴同时冲进 IconCache。</summary>
     private static readonly SemaphoreSlim IconGate = new(2, 2);
 
+    /// <summary>磁贴图标槽位的 DIP 尺寸，与 Theme/Tokens.xaml 的 Tile.Icon 保持一致。</summary>
+    private const double TileIconDip = 44;
+
     /// <summary>分组筛选谓词：null=全部；""=未分类；其他=分组名精确匹配。</summary>
     private static bool GroupMatch(string? group, string? match)
         => match == null || (match == "" ? string.IsNullOrEmpty(group) : group == match);
@@ -398,7 +401,10 @@ public partial class MainWindow : Window
     {
         try
         {
-            await tile.LoadIconAsync(IconGate, PersistEntry, 44);
+            //按 DPI 换算物理像素：槽位 44 DIP 在 175% 下要 77 物理像素。
+            // 只解码 44px 会把124px 的缓存源图降采样掉细节，再让 WPF 拉伸回 77 —— 必糊。
+            var px = DpiScale.ToPixels(TileIconDip);
+            await tile.LoadIconAsync(IconGate, PersistEntry, px);
         }
         catch (Exception ex)
         {
