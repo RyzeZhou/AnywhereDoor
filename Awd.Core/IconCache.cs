@@ -16,15 +16,23 @@ namespace Awd.Core;
 /// </summary>
 public static class IconCache
 {
+    /// <summary>
+    /// 字形占画布的最小比例。低于这个值就不贴边裁（见 <see cref="TrimTransparent"/>），
+    /// 改走"正方形限比例裁"—— 否则图标会顶满白卡、边缘发紧。
+    /// 实测四档对比后取0.55：字形够大，又留得住呼吸，与系统图标视图最接近。
+    /// </summary>
+    private const double MinKeepRatio = 0.55;
+
     public static string CacheDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "AnywhereDoor", "iconcache");
 
     /// <summary>缓存文件的路径 —— 纯算路径，不碰 COM 也不建目录。
     /// 地图里因此**不需要存 iconPath**：由 target 就能推出来（它占了老文件 28% 的字节）。
-    /// t1 = 裁剪版缓存（v1 没裁透明留白，计算器字形只占画布 32%）。</summary>
+    /// t1 = 裁剪版（v1 没裁透明留白）；t2 = 裁剪加了限比例（t1 会贴边裁，图标顶满白卡发紧）。
+    /// 版本号在文件名里，改裁剪策略必须升版本 —— 否则旧缓存永远命中，改动看不见。</summary>
     public static string PathFor(string target, int size = 256) =>
-        Path.Combine(CacheDir, $"{AppEntry.MakeId(target)}_{size}t1.png");
+        Path.Combine(CacheDir, $"{AppEntry.MakeId(target)}_{size}t2.png");
 
     /// <summary>探测 + 落缓存。NaturalWidth/Height 是真实可得尺寸，CachePath 是请求尺寸的 PNG。</summary>
     public sealed record ProbeResult(int NaturalWidth, int NaturalHeight, string? CachePath, string CacheSizeText);
@@ -93,8 +101,19 @@ public static class IconCache
     }
 
     /// <summary>
-    /// 透明底 logo 常自带大片留白（实测计算器字形只占画布 32%）：按 alpha 裁到字形边界，
-    /// 留 ~5% 呼吸边。全透明（裁不出东西）返回 null 交给调用方用原图。
+    /// 透明底 logo 常自带大片留白（实测计算器字形只占画布 11%），照原样铺进网格会显得小而空。
+    /// 按 alpha 裁到字形边界 + 呼吸边即可解决 —— 但**不能贴边裁**：
+    /// 裁到只剩字形时图标会顶满白卡、边缘发紧，与 Windows 图标视图的观感反着来。
+    ///
+    /// 实测四档对比（计算器，源 300×300，字形 90×114）：
+    ///   贴字形+5% → 100×124  字形最大但顶满边缘（现状，观感"发紧"）
+    ///   正方形55% → 165×165  字形偏大但四周有呼吸（最接近系统图标视图）
+    ///   不裁     → 300×300  字形只占 1/3 画布（观感"空"）
+    ///
+    /// 所以规则是：字形占画布不足 <see cref="MinKeepRatio"/> 时，**放弃贴边裁**，
+    /// 改成以字形中心裁一个正方形、边长为画布的 <see cref="MinKeepRatio"/>——
+    /// 既把留白去掉一部分，又保证四周留得住呼吸。
+    /// 全透明（裁不出字形）返回 null，交给调用方用原图。
     /// </summary>
     private static byte[]? TrimTransparent(byte[] pngBytes)
     {
@@ -122,14 +141,39 @@ public static class IconCache
                 }
             }
             if (maxX < 0) return null;
-            var pad = Math.Max(2, Math.Max(maxX - minX, maxY - minY) / 20);
-            minX = Math.Max(0, minX - pad);
-            minY = Math.Max(0, minY - pad);
-            var cw = Math.Min(w - 1, maxX + pad) - minX + 1;
-            var ch = Math.Min(h - 1, maxY + pad) - minY + 1;
+
+            var box = new Int32Rect(minX, minY, maxX - minX + 1, maxY - minY + 1);
+            var shortSide = (double)Math.Min(w, h);
+            var glyphRatio = (double)Math.Min(box.Width, box.Height) / shortSide;
+
+            Int32Rect crop;
+            if (glyphRatio >= MinKeepRatio)
+            {
+                // 字形已经占得够大，贴边裁 + 5% 呼吸边即可
+                var pad = Math.Max(2, Math.Max(box.Width, box.Height) / 20);
+                var x0 = Math.Max(0, box.X - pad);
+                var y0 = Math.Max(0, box.Y - pad);
+                crop = new Int32Rect(
+                    x0, y0,
+                    Math.Min(w, box.X + box.Width + pad) - x0,
+                    Math.Min(h, box.Y + box.Height + pad) - y0);
+            }
+            else
+            {
+                // 字形太小（logo 自带大片留白）：不贴边裁，改以字形中心取一个正方形，
+                // 边长 = 画布 × MinKeepRatio。这样去掉了部分留白，四周还留得住呼吸。
+                int side = (int)Math.Ceiling(shortSide * MinKeepRatio);
+                side = Math.Max(side, Math.Max(box.Width, box.Height) + 4);   // 至少装得下字形
+                side = Math.Min(side, Math.Min(w, h));
+                var cx = box.X + box.Width / 2;
+                var cy = box.Y + box.Height / 2;
+                var x0 = Math.Max(0, Math.Min(w - side, cx - side / 2));
+                var y0 = Math.Max(0, Math.Min(h - side, cy - side / 2));
+                crop = new Int32Rect(x0, y0, side, side);
+            }
 
             var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(new CroppedBitmap(bgra, new Int32Rect(minX, minY, cw, ch))));
+            encoder.Frames.Add(BitmapFrame.Create(new CroppedBitmap(bgra, crop)));
             using var outMs = new MemoryStream();
             encoder.Save(outMs);
             return outMs.ToArray();
