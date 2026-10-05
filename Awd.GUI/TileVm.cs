@@ -34,6 +34,34 @@ public sealed class TileVm : INotifyPropertyChanged
     public Visibility IconVisibility => _iconImage == null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility PlaceholderVisibility => _iconImage == null ? Visibility.Visible : Visibility.Collapsed;
 
+    /// <summary>
+    /// 目标是否已失效（程序被卸载 / 文件被挪走 / 换机后路径变了）。
+    /// 判不出来的一律按"在位"处理 —— 宁可漏标，也别把好条目灰掉（见 AppHealth）。
+    /// </summary>
+    public bool IsMissing { get; private set; }
+
+    /// <summary>失效原因（人话，给状态栏与提示用）；在位时为空串。</summary>
+    public string MissingReason { get; private set; } = "";
+
+    public Visibility MissingBadgeVisibility =>
+        IsMissing ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>整块磁贴压暗，失效与有效一眼能分开（只看图标容易漏看）。</summary>
+    public double TileOpacity => IsMissing ? 0.45 : 1.0;
+
+    /// <summary>体检一次，结果缓存进 VM：加载时统一跑一遍，别在模板里反复问文件系统。</summary>
+    public void RefreshHealth()
+    {
+        var missing = AppHealth.IsMissing(Entry, out var reason);
+        if (missing == IsMissing && reason == MissingReason) return;
+        IsMissing = missing;
+        MissingReason = reason;
+        Raise(nameof(IsMissing));
+        Raise(nameof(MissingReason));
+        Raise(nameof(MissingBadgeVisibility));
+        Raise(nameof(TileOpacity));
+    }
+
     /// <summary>没真图标时的占位字形：按目标形态给（程序/文件夹/网址/远程）。</summary>
     public string GlyphChar => Entry.Kind switch
     {

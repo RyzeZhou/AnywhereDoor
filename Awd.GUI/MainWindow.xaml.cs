@@ -208,6 +208,38 @@ public partial class MainWindow : Window
             foreach (var t in page)
                 LoadIconAsync(t);
         RebuildMapCombo();
+        ReportHealth();
+    }
+
+    /// <summary>
+    /// 加载后给所有磁贴做一次失效体检，并把结果报到状态栏。
+    /// 体检在后台线程跑（Uwp 分支要枚举已安装包，冷启动时不算便宜），完了回 UI 线程应用。
+    /// </summary>
+    private void ReportHealth()
+    {
+        var all = _pages.SelectMany(p => p).ToList();
+        Task.Run(() =>
+        {
+            var flags = new bool[all.Count];
+            for (int i = 0; i < all.Count; i++) flags[i] = AppHealth.IsMissing(all[i].Entry);
+            return flags;
+        }).ContinueWith(t =>
+        {
+            if (t.IsFaulted) return;   // 体检失败不拦启动：条目照常在，只是没标灰
+            var flags = t.Result;
+            Dispatcher.Invoke(() =>
+            {
+                int missing = 0;
+                for (int i = 0; i < all.Count; i++)
+                {
+                    all[i].RefreshHealth();
+                    if (all[i].IsMissing) missing++;
+                }
+                // 只有真的有失效项才说话 —— 每次启动都报"全部在位"是噪音
+                if (missing > 0)
+                    SetStatus($"{missing} 条收藏已失效（图标标灰）—— 右键「重新定位…」换新路径，或「移除收藏」", warn: true);
+            });
+        });
     }
 
     // ================== 地图（四页布局的整体，可建多张随时切） ==================
@@ -1071,6 +1103,57 @@ public partial class MainWindow : Window
         SetStatus($"已保存对「{vm.Entry.Name}」的修改");
     }
 
+    /// <summary>
+    /// 重新定位失效的收藏：程序被挪了位置、卸载重装换了路径、或者换了机器 ——
+    /// 收藏里存的绝对路径就过期了。这里让用户指个新的 exe/文件夹，保留原名与分组，只换 Target。
+    /// UWP 不走这条（卸载了就是卸载了，重装会拿到新的 AUMID，该重新添加而不是改路径）。
+    /// </summary>
+    private void OnMenuRelocate(object sender, RoutedEventArgs e)
+    {
+        if (MenuTile(sender) is not { } vm) return;
+        var entry = vm.Entry;
+
+        string picked;
+        if (entry.Kind == AppKind.Folder)
+        {
+            var fdlg = new Microsoft.Win32.OpenFolderDialog { Title = $"为「{entry.Name}」选新的位置" };
+            if (fdlg.ShowDialog(this) != true) return;
+            picked = fdlg.FolderName;
+        }
+        else if (entry.Kind is AppKind.Exe or AppKind.Lnk)
+        {
+            var odlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = $"为「{entry.Name}」选新的程序文件",
+                Filter = "程序与快捷方式|*.exe;*.lnk|程序|*.exe|快捷方式|*.lnk|所有文件|*.*",
+            };
+            if (odlg.ShowDialog(this) != true) return;
+            picked = odlg.FileName;
+        }
+        else
+        {
+            SetStatus("商店应用失效没法「改路径」—— 重新装上后从应用清单里再添加一次", warn: true);
+            return;
+        }
+
+        // 新位置已经被别的收藏占了：两条同 Target 会让"移除一条另一条也坏"
+        if (_pages[(int)entry.Page].Any(t => t != vm &&
+                t.Entry.Target.Equals(picked, StringComparison.OrdinalIgnoreCase)))
+        {
+            SetStatus("那个目标已经在本页收藏里了 —— 直接删掉这条旧的即可", warn: true);
+            return;
+        }
+
+        var old = entry.Target;
+        entry.Target = picked;
+        entry.Id = AppEntry.MakeId(picked);   // id 是 target 的函数，换目标必须重算
+        entry.IconPath = null;                // 旧图标是旧目标的，别留着张对不上的脸
+        vm.RefreshHealth();
+        Persist();
+        ReloadFromStore();
+        SetStatus($"「{entry.Name}」已重新定位到 {picked}");
+    }
+
     private void OnMenuMoveUp(object sender, RoutedEventArgs e) => ShiftTile(MenuTile(sender), -1);
     private void OnMenuMoveDown(object sender, RoutedEventArgs e) => ShiftTile(MenuTile(sender), +1);
 
@@ -1107,18 +1190,123 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>直接选 exe 入收藏（便携程序没有开始菜单 lnk，清单里枚举不到）。</summary>
+    /// <summary>直接选 exe 入收藏（便携程序没有开始菜单 lnk，清单里枚举不到）。可多选。</summary>
     private void OnAddExeFile(object sender, RoutedEventArgs e)
     {
         var dlg = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "选择要收藏的 exe（便携程序直接选文件）",
+            Title = "选择要收藏的 exe（可多选；便携程序直接选文件）",
             Filter = "程序|*.exe|所有文件|*.*",
+            Multiselect = true,
         };
         if (dlg.ShowDialog(this) != true) return;
-        var path = dlg.FileName;
-        var name = Path.GetFileNameWithoutExtension(path);
-        AddEntry(PageKind.Programs, AppKind.Exe, path, name); // 工作目录留空 = 启动时默认 exe 所在目录
+        // 工作目录留空 = 启动时默认 exe 所在目录
+        var added = AddEntries(PageKind.Programs, dlg.FileNames.Select(p => new AppEntry
+        {
+            Name = Path.GetFileNameWithoutExtension(p),
+            Kind = AppKind.Exe,
+            Target = p,
+        }));
+        ReportAdded(added, "个 exe");
+    }
+
+    /// <summary>扫整个文件夹：里面的 exe 与 .lnk 快捷方式一次性收进来（多选对话框办不到的量）。</summary>
+    private void OnAddExeFolder(object sender, RoutedEventArgs e)
+    {
+        var dlg = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择要扫描的文件夹（会收里面的 exe 与快捷方式，含子目录）",
+        };
+        if (dlg.ShowDialog(this) != true) return;
+
+        FolderScan.Result scan;
+        try
+        {
+            scan = Task.Run(() => FolderScan.Scan(dlg.FolderName)).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            SetStatus($"扫描失败：{ex.Message}", warn: true);
+            return;
+        }
+
+        if (scan.Entries.Count == 0)
+        {
+            SetStatus($"「{dlg.FolderName}」里没有找到 exe 或快捷方式（共看了 {scan.ScannedFiles} 个文件）", warn: true);
+            return;
+        }
+
+        // 数量大先报个数再问一句：扫到 300 个 exe 很可能指错目录了，不该闷头全塞进来
+        if (scan.Entries.Count >= 20)
+        {
+            var tail = scan.Truncated
+                ? $"\n\n（达到 {FolderScan.MaxResults} 项上限，只扫到前 {FolderScan.MaxResults} 项）"
+                : "";
+            if (MessageBox.Show(this,
+                    $"扫到 {scan.Entries.Count} 个可执行程序 / 快捷方式，全部加入程序页？{tail}",
+                    "确认批量导入", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            {
+                SetStatus("已取消导入");
+                return;
+            }
+        }
+
+        var added = AddEntries(PageKind.Programs, scan.Entries);
+        ReportAdded(added, "个程序");
+    }
+
+    /// <summary>
+    /// 批量入库。按 Target 逐条查重（已收藏的跳过），返回 (新增, 已存在) 计数。
+    /// 入参的 Kind / Arguments / WorkingDir 原样带过去 —— 文件夹里扫出来的 .lnk
+    /// 必须保持 Lnk 类型和它自己的参数、工作目录，否则启动通道会走错。
+    /// </summary>
+    private (int Added, int Existed) AddEntries(PageKind page, IEnumerable<AppEntry> items)
+    {
+        int p = (int)page;
+        var pending = new List<AppEntry>();
+        int existed = 0;
+
+        foreach (var src in items)
+        {
+            if (_pages[p].Any(t => t.Entry.Target.Equals(src.Target, StringComparison.OrdinalIgnoreCase)))
+            {
+                existed++;
+                continue;
+            }
+            pending.Add(new AppEntry
+            {
+                Id = AppEntry.MakeId(src.Target),
+                Name = src.Name,
+                Kind = src.Kind,
+                Page = page,
+                Target = src.Target,
+                Arguments = src.Arguments,
+                WorkingDir = src.WorkingDir,
+                Position = _pages[p].Count + pending.Count,
+            });
+        }
+
+        if (pending.Count == 0) return (0, existed);
+
+        foreach (var entry in pending)
+        {
+            var vm = new TileVm(entry);
+            _pages[p].Add(vm);
+            LoadIconAsync(vm);
+        }
+        Persist();
+        return (pending.Count, existed);
+    }
+
+    private void ReportAdded((int Added, int Existed) r, string unit)
+    {
+        if (r.Added == 0)
+        {
+            SetStatus($"没有新增 —— {r.Existed} 个已在收藏中", warn: true);
+            return;
+        }
+        var extra = r.Existed > 0 ? $"，跳过 {r.Existed} 个已收藏" : "";
+        SetStatus($"已收藏 {r.Added} {unit}{extra}");
     }
 
     private void OnAddFolder(object sender, RoutedEventArgs e)

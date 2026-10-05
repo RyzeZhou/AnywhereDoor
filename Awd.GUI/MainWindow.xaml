@@ -112,11 +112,14 @@
         <DataTemplate x:Key="RowTemplate">
             <Border Style="{StaticResource RowStyle}"
                     PreviewMouseLeftButtonDown="OnRowMouseDown"
-                    MouseMove="OnRowMouseMove">
+                    MouseMove="OnRowMouseMove"
+                    Opacity="{Binding TileOpacity}">
                 <Border.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="启动" Click="OnMenuLaunch"/>
                         <MenuItem Header="编辑…" Click="OnMenuEdit"/>
+                        <MenuItem Header="重新定位…" Click="OnMenuRelocate"
+                                  Visibility="{Binding MissingBadgeVisibility}"/>
                         <Separator/>
                         <MenuItem Header="上移" Click="OnMenuMoveUp"/>
                         <MenuItem Header="下移" Click="OnMenuMoveDown"/>
@@ -141,6 +144,12 @@
                                FontSize="{StaticResource Font.Size.Primary}"
                                Foreground="{StaticResource Brush.Text.Primary}"
                                TextTrimming="CharacterEllipsis"/>
+                    <!-- 失效行：名字后缀一句原因，比只看图标明显（列表行没有角标位） -->
+                    <TextBlock Text="{Binding MissingReason}" VerticalAlignment="Center"
+                               FontSize="{StaticResource Font.Size.Status}"
+                               Foreground="{StaticResource Brush.Danger}"
+                               Margin="8,0,0,0" TextTrimming="CharacterEllipsis" MaxWidth="160"
+                               Visibility="{Binding MissingBadgeVisibility}"/>
                 </DockPanel>
             </Border>
         </DataTemplate>
@@ -343,7 +352,9 @@
                     <StackPanel Orientation="Horizontal">
                         <Button Content="从应用清单添加…" Style="{StaticResource GhostButton}" Click="OnAddFromInventory"/>
                         <Button Content="添加 exe 文件…" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
-                                Click="OnAddExeFile" ToolTip="便携程序直接选 exe，不用进开始菜单"/>
+                                Click="OnAddExeFile" ToolTip="便携程序直接选 exe，不用进开始菜单（可多选）"/>
+                        <Button Content="导入文件夹…" Style="{StaticResource GhostButton}" Margin="8,0,0,0"
+                                Click="OnAddExeFolder" ToolTip="扫整个文件夹里的 exe 与快捷方式，一次收一批"/>
                     </StackPanel>
                 </Border>
                 <Grid>
@@ -397,6 +408,7 @@
                                                 <ContextMenu>
                                                     <MenuItem Header="启动" Click="OnMenuLaunch"/>
                                                     <MenuItem Header="编辑…" Click="OnMenuEdit"/>
+                                                    <MenuItem Header="重新定位…" Click="OnMenuRelocate"/>
                                                     <Separator/>
                                                     <MenuItem Header="上移" Click="OnMenuMoveUp"/>
                                                     <MenuItem Header="下移" Click="OnMenuMoveDown"/>
@@ -404,7 +416,9 @@
                                                     <MenuItem Header="移除收藏" Click="OnMenuRemove"/>
                                                 </ContextMenu>
                                             </Border.ContextMenu>
-                                            <Grid>
+                                            <!-- 失效压暗绑在这层而不是 tileRoot：拖拽时代码要把 tileRoot.Opacity 临时压到 0.55 再还原，
+     绑在同一个元素上会被那两次赋值覆盖掉（拖完就恢复成不透明），分层后两者相乘，互不干扰 -->
+                                            <Grid Opacity="{Binding TileOpacity}">
                                                 <Border Style="{StaticResource TileShadowLayer}"/>
                                                 <StackPanel>
                                                     <Grid Height="{StaticResource Tile.Icon}" Width="{StaticResource Tile.Icon}"
@@ -420,6 +434,13 @@
                                                                    Visibility="{Binding PlaceholderVisibility}" Margin="2"/>
                                                         <Image Source="{Binding IconImage}" Stretch="Uniform"
                                                                Visibility="{Binding IconVisibility}" Margin="2"/>
+                                                        <!-- 失效角标：红点挂在图标卡右上角，一眼区分"坏了"和"还没图标" -->
+                                                        <Ellipse Width="9" Height="9" Fill="{StaticResource Brush.Danger}"
+                                                                 HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                 Margin="0,-1,-1,0" Stroke="{StaticResource Brush.Surface}"
+                                                                 StrokeThickness="1.5"
+                                                                 Visibility="{Binding MissingBadgeVisibility}"
+                                                                 ToolTip="{Binding MissingReason}"/>
                                                     </Grid>
                                                     <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
                                                                Foreground="{StaticResource Brush.Text.Primary}"

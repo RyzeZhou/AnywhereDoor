@@ -35,6 +35,8 @@ internal static class Program
             用法: awd <命令> [参数]
               paths                                显示收藏与图标缓存路径（目录不存在则创建）
               apps   [--find 关键词] [--kind lnk|exe|uwp]       枚举已安装程序
+              scan <目录> [--depth N]                  扫文件夹里的 exe 与快捷方式（= GUI「导入文件夹…」）
+              check                体检：哪些收藏的目标已失效（卸载 / 移动 / 换机）
               icon   <目标|AUMID|@id> [--size 256]              图标探测 + 生成缓存 PNG
               icons  [--find 关键词] [--kind lnk|exe|uwp] [--limit N] [--size 256]
                                                    批量探测：真实尺寸分档统计
@@ -80,6 +82,8 @@ internal static class Program
         {
             "paths" => CmdPaths(),
             "apps" => CmdApps(rest),
+            "scan" => CmdScan(rest),
+            "check" => CmdCheck(rest),
             "icon" => CmdIcon(rest),
             "icons" => CmdIcons(rest),
             "launch" => CmdLaunch(rest),
@@ -137,6 +141,50 @@ internal static class Program
         }
         Console.WriteLine($"共 {list.Count} 项（lnk=开始菜单快捷方式，exe=直接路径，uwp=AUMID）");
         return 0;
+    }
+
+    /// <summary>扫一个文件夹里的 exe / 快捷方式 —— 与 GUI「导入文件夹…」同一条通路（FolderScan）。</summary>
+    private static int CmdScan(string[] args)
+    {
+        var p = Parse(args);
+        var dir = p.Positional.FirstOrDefault()
+            ?? throw new InvalidOperationException("缺少目录（awd scan <目录> [--depth N]）");
+        var depth = p.IntOption("depth", FolderScan.DefaultMaxDepth);
+
+        var r = FolderScan.Scan(dir, depth);
+        foreach (var e in r.Entries)
+            Console.WriteLine($"[{e.Kind,-3}] {e.Name}  ←  {e.Target}");
+        var tail = r.Truncated ? $"（已达 {FolderScan.MaxResults} 项上限，只扫到前 {FolderScan.MaxResults} 项）" : "";
+        Console.WriteLine($"扫到 {r.Entries.Count} 项（看了 {r.ScannedFiles} 个 exe/lnk，深度 {depth}）{tail}");
+        return 0;
+    }
+
+    /// <summary>收藏体检：哪些条目的目标已经不在了。只报告不改数据，处置交给用户。</summary>
+    private static int CmdCheck(string[] args)
+    {
+        var p = Parse(args);
+        var map = MapStore.OpenActive();
+        var pageFilter = p.Option("page");
+
+        var entries = map.Entries;
+        if (pageFilter != null)
+        {
+            var page = ParsePage(pageFilter);
+            entries = entries.Where(e => e.Page == page).ToList();
+        }
+
+        var missing = new List<(AppEntry Entry, string Reason)>();
+        foreach (var e in entries)
+            if (AppHealth.IsMissing(e, out var reason))
+                missing.Add((e, reason));
+
+        foreach (var (e, reason) in missing)
+            Console.WriteLine($"[{PageLabel(e.Page)}] {e.Name}  —— {reason}\n    {e.Target}");
+
+        Console.WriteLine(missing.Count == 0
+            ? $"{entries.Count} 条收藏全部在位"
+            : $"{entries.Count} 条里 {missing.Count} 条已失效（GUI 里会标灰，右键可重新定位）");
+        return missing.Count == 0 ? 0 : 1;
     }
 
     private static int CmdIcon(string[] args)

@@ -20,6 +20,7 @@ internal static class ShellInterop
     // ---- 显示名标志（SIGDN_）----
     internal const uint SIGDN_NORMALDISPLAY = 0x0;                // 界面显示名
     internal const uint SIGDN_PARENTRELATIVEPARSING = 0x80018001; // 相对父文件夹的解析名 = AppsFolder 里的 AUMID
+    internal const uint SIGDN_FILESYSPATH = 0x80058000;           // 真实文件系统路径（UWP/商店应用没有，返回失败）
 
     private const uint SHCONTF_FOLDERS = 0x20;
     private const uint SHCONTF_NONFOLDERS = 0x40;
