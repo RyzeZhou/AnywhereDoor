@@ -17,11 +17,17 @@ namespace Awd.Core;
 public static class IconCache
 {
     /// <summary>
-    /// 字形占画布的最小比例。低于这个值就不贴边裁（见 <see cref="TrimTransparent"/>），
-    /// 改走"正方形限比例裁"—— 否则图标会顶满白卡、边缘发紧。
-    /// 实测四档对比后取0.55：字形够大，又留得住呼吸，与系统图标视图最接近。
+ /// 裁剪时在字形外留的呼吸边，按**字形自身最大边**的比例。
+    /// 0.15 = 字形 44px → 留 6px（实测 7-Zip 裁成 60×50，磁贴里清晰可辨）。
+    ///
+    /// 曾经用过的错法：字形不足 <c>MinKeepRatio(0.55)</c> 时改走"正方形限比例裁"。
+    /// 那条规则保护了留白，却把小字形**压死**了 —— 7-Zip 源512×512 里"7z"字形只有
+  /// 44×34（占 8.5%），限比例裁出 282×282 后字形**仍只占 12%**，
+    /// 在磁贴里小到几乎看不见；贴字形裁得到 60×50，一眼可辨。
+    /// > 教训：一个规则"在已测样本上好看"不等于它对**未测样本**也成立。
+    /// 当时的四档对比全是同一类图（字形居中、底色透明），看不出这个偏差。
     /// </summary>
-    private const double MinKeepRatio = 0.55;
+    private const double PadRatio = 0.15;
 
     public static string CacheDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -30,7 +36,7 @@ public static class IconCache
 /// <summary>缓存文件的路径 —— 纯算路径，不碰 COM 也不建目录。
     /// 地图里因此**不需要存 iconPath**：由 target 就能推出来（它占了老文件 28% 的字节）。
     /// t1 = 裁剪版；t2 = 裁剪加限比例；t3 = 内容判定 alpha 16→128（治半透明晕圈撑满包围盒）；
-    /// t4 = 取图与显示解耦：缓存一律存 512 档，显示尺寸由 DecodePixelWidth 降采样。
+    /// t4 = 取图与显示解耦（一律存 512 档）；t5 = 裁剪改贴字形 + 留白按字形比例（限比例裁会把小字形压死）。
     /// 版本号在文件名里，改裁剪/取图策略必须升版本 —— 否则旧缓存永远命中，改动看不见。
     ///
     /// <b>为什么不带尺寸参数</b>：曾经按尺寸分档存过，实测发现两个问题 ——
@@ -38,7 +44,7 @@ public static class IconCache
     /// 分档存根本对不齐（77 和 210 裁出来都是同一张 282）。
     /// 一次取最大、显示时采样，磁盘一份就够，画质也不差（WPF 的双三次滤波够好）。</summary>
     public static string PathFor(string target) =>
-        Path.Combine(CacheDir, $"{AppEntry.MakeId(target)}_{DefaultSize}t4.png");
+        Path.Combine(CacheDir, $"{AppEntry.MakeId(target)}_{DefaultSize}t6.png");
 
     /// <summary>
     /// 缓存与取图都用这个尺寸（物理像素）。
@@ -194,26 +200,63 @@ public static class IconCache
         return new[] { px[i], px[i + 1], px[i + 2], px[i + 3] };
     }
 
-/// <summary>
-    /// 这个像素算不算"图标内容"：alpha 高于 <see cref="ContentAlpha"/>，
-    /// **且**与背景基准色差异够大。
+    /// <summary>
+    /// 找"图标内容"的紧致包围盒。三条判据组合，覆盖三类底色：
     ///
-    /// alpha 阈值取 128 而不是常见的 16，实测逼出来的：7-Zip 的 512×512 图四周有一圈
-    /// alpha 16~79 的**半透明晕圈**（抗锯齿残留），按 16 算包围盒会被撑满整张 512×512，
-    /// 于是字形（真身只有 44×34）被当成满幅图，裁剪彻底不起作用 —— 这就是 7z 字形
-    /// 在磁贴里一直很小的真凶。提到 128 后它从 98% 骤降到 7%，另两个图标（计算器/Skype）
-    /// 在 16 与 128 之间稳定在 48~63%，不受影响。
+    /// 1. **alpha &gt; <see cref="ContentAlpha"/>** —— 治透明底的半透明晕圈
+    ///    （7-Zip 512×512 四周那圈 alpha 16~79 的抗锯齿残留会把包围盒撑满整张）。
+    /// 2. **与四边中位色差异够大** —— 治不透明纯色底。
+    /// 3. **局部梯度够强** —— 治**品牌色底**（最阴的一种，实测 7-Zip 是橙色底 + 中间小白标）。
     ///
-    /// 色差条件是补充：万一周围是**不透明**的深灰底（另有这类图标），
-    /// 只查 alpha 同样会漏判，两者一起用覆盖得更全。
-    /// </summary>
-    private static bool IsContent(byte[] px, int i, byte[] bg)
+    /// 第 3 条是关键：橙色底上从四边取样，取到的就是橙色本身，于是"与底色有差异"
+ /// 只会在中间的白色字形处成立 —— 而字形只占 20%，剩下大片橙色被判成背景，
+ /// 裁剪把画布从 512 缩到 282 但**字形仍只占 20%**，在磁贴里还是小得离谱。
+    ///
+    /// 改用**梯度**（与右/下邻居的亮度差）就稳了：平坦的橙色底梯度≈0，
+    /// 字形轮廓处梯度剧烈。实测 7-Zip 这样能把 20% 的字形完整框出来。
+  /// </summary>
+    private static RectInt ContentBox(byte[] px, int stride, int w, int h)
     {
+        var bg = EstimateBackground(px, stride, w, h);
+        int minX = w, minY = h, maxX = -1, maxY = -1;
+ for (int y = 0; y < h; y++)
+        {
+            int row = y * stride;
+          for (int x = 0; x < w; x++)
+            {
+       var i = row + x * 4;
+    if (!IsContent(px, i, bg, stride, x, y, w, h)) continue;
+         if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+       if (y < minY) minY = y;
+  if (y > maxY) maxY = y;
+   }
+        }
+        return maxX < 0 ? new RectInt(0, 0, 0, 0) : new RectInt(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    }
+
+    /// <summary>整数矩形。不用 WPF 的 Int32Rect —— 那个允许负宽，出错时不报反而更难查。</summary>
+  private readonly record struct RectInt(int X, int Y, int Width, int Height);
+
+    /// <summary>
+    /// 这个像素算不算"图标内容"：alpha 够高，且**要么**与背景底色差异够大、
+    /// **要么**局部梯度够强（后者治品牌色底，见 <see cref="ContentBox"/>）。
+    /// </summary>
+    private static bool IsContent(byte[] px, int i, byte[] bg, int stride, int x, int y, int w, int h)
+{
         if (px[i + 3] <= ContentAlpha) return false;
-     var d = Math.Abs(px[i] - bg[0]) + Math.Abs(px[i + 1] - bg[1]) + Math.Abs(px[i + 2] - bg[2]);
-        var da = Math.Abs(px[i + 3] - bg[3]);
-        // 灰度底色时色差可能很小，放宽一点；色底色（品牌色）自然就超阈值了
- return d + da >= ContentThreshold;
+        var d = Math.Abs(px[i] - bg[0]) + Math.Abs(px[i + 1] - bg[1]) + Math.Abs(px[i + 2] - bg[2])
+    + Math.Abs(px[i + 3] - bg[3]);
+   if (d >= ContentThreshold) return true;
+
+        // 梯度：与右邻居、下邻居的亮度差。右/下边界像素不算（没有邻居）。
+    if (x + 1 >= w || y + 1 >= h) return false;
+  var right = i + 4;
+        var down = i + stride * 4;
+        int lum = px[i] + px[i + 1] + px[i + 2];
+        int lumR = px[right] + px[right + 1] + px[right + 2];
+        int lumD = px[down] + px[down + 1] + px[down + 2];
+        return Math.Abs(lum - lumR) + Math.Abs(lum - lumD) >= GradientThreshold;
     }
 
     /// <summary>内容判定的 alpha 下限。128 = 半透明晕圈之上、实心之上。</summary>
@@ -221,6 +264,12 @@ public static class IconCache
 
     /// <summary>内容判定的色差阈值：RGB 之和 + alpha 差，24 约等于每通道差 8 级。</summary>
     private const int ContentThreshold = 24;
+
+    /// <summary>
+    /// 梯度阈值：与右+下邻居的亮度差之和，60 约等于每通道差 20 级。
+    /// 定得偏高以免把抗锯齿边缘当内容（那是噪声），偏低会漏掉低对比度字形。
+    /// </summary>
+    private const int GradientThreshold = 60;
 
     /// <summary>
     /// 透明底 logo 常自带大片留白（实测计算器字形只占画布 11%），照原样铺进网格会显得小而空。
@@ -232,9 +281,7 @@ public static class IconCache
     ///   正方形55% → 165×165  字形偏大但四周有呼吸（最接近系统图标视图）
     ///   不裁     → 300×300  字形只占 1/3 画布（观感"空"）
     ///
-    /// 所以规则是：内容占画布不足 <see cref="MinKeepRatio"/> 时，**放弃贴边裁**，
-    /// 改成以内容中心裁一个正方形、边长为画布的 <see cref="MinKeepRatio"/>——
-    /// 既把留白去掉一部分，又保证四周留得住呼吸。
+    /// 规则：**贴字形裁 + 按字形自身比例留白**（<see cref="PadRatio"/>）。
     /// 全透明（裁不出内容）返回 null，交给调用方用原图。
     ///
     /// <b>内容边界不能只看 alpha</b>：实测 7-Zip 的 512×512 图里"7z"字形只占 20%，
@@ -254,58 +301,28 @@ public static class IconCache
             var px = new byte[stride * h];
             bgra.CopyPixels(px, stride, 0);
 
-// 背景基准色 = 四角像素的中位色。透明底算出来的中位色 alpha≈0，
-        // 于是"与它差异大"退化成"alpha 高"，正好覆盖原来只查 alpha 的那条路径；
-        // 不透明深灰底的图标（7-Zip）则得到那个灰，比较时能把大片底色排除掉。
-     var bg = EstimateBackground(px, stride, w, h);
+       // 内容包围盒：三条判据（alpha / 底色差 / 梯度）合起来判定，见 ContentBox。
+        var content = ContentBox(px, stride, w, h);
+        if (content.Width <= 0 || content.Height <= 0) return null;
+        var box = new Int32Rect(content.X, content.Y, content.Width, content.Height);
 
-      int minX = w, minY = h, maxX = -1, maxY = -1;
-        for (int y = 0; y < h; y++)
-        {
-    var row = y * stride;
-     for (int x = 0; x < w; x++)
-    {
-         var i = row + x * 4;
-     if (!IsContent(px, i, bg)) continue;
-        if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-          }
-        }
-      if (maxX < 0) return null;
-
-      var box = new Int32Rect(minX, minY, maxX - minX + 1, maxY - minY + 1);
-     var shortSide = (double)Math.Min(w, h);
-     var glyphRatio = (double)Math.Min(box.Width, box.Height) / shortSide;
-
-            Int32Rect crop;
-            if (glyphRatio >= MinKeepRatio)
-            {
-                // 字形已经占得够大，贴边裁 + 5% 呼吸边即可
-                var pad = Math.Max(2, Math.Max(box.Width, box.Height) / 20);
-                var x0 = Math.Max(0, box.X - pad);
-                var y0 = Math.Max(0, box.Y - pad);
-                crop = new Int32Rect(
-                    x0, y0,
-                    Math.Min(w, box.X + box.Width + pad) - x0,
-                    Math.Min(h, box.Y + box.Height + pad) - y0);
-            }
-            else
-            {
-                // 字形太小（logo 自带大片留白）：不贴边裁，改以字形中心取一个正方形，
-// 边长 = 画布 × MinKeepRatio。这样去掉了部分留白，四周还留得住呼吸。
-          int side = (int)Math.Ceiling(shortSide * MinKeepRatio);
-          side = Math.Max(side, Math.Max(box.Width, box.Height));   // 至少装得下内容
-          side = Math.Min(side, Math.Min(w, h));                // 不能超出画布
-      // 内容比画布还大（异常图/极端比例）：退化为整幅，交给上面那条贴边裁或原图
-          if (side < 1) return null;
-       var cx = box.X + box.Width / 2;
-      var cy = box.Y + box.Height / 2;
-  var x0 = Math.Max(0, Math.Min(w - side, cx - side / 2));
-    var y0 = Math.Max(0, Math.Min(h - side, cy - side / 2));
-   crop = new Int32Rect(x0, y0, side, side);
-         }
+        // 贴字形裁 + 按字形尺寸的百分比留白。
+      //
+        // 为什么不用"限比例裁"（曾试过：字形不足 55% 就取画布×55% 的正方形）：
+        // 那个规则保护了留白，却把小字形**压死**了 —— 实测 7-Zip 源 512×512 里
+      // "7z" 字形只有 44×34（占 8.5%），限比例裁出 282×282 后字形仍占 12%，
+        // 在磁贴里小到几乎看不见。而贴字形裁得到 60×50，字形清晰可辨。
+      //
+        // 留白按**字形自身**的比例给（PadRatio），不按画布：字形小就少留、
+        // 字形本就满幅就多留，两种情况观感统一。
+        var glyphMax = Math.Max(box.Width, box.Height);
+        var pad = Math.Max(2, (int)(glyphMax * PadRatio));
+        var x0 = Math.Max(0, box.X - pad);
+     var y0 = Math.Max(0, box.Y - pad);
+        var crop = new Int32Rect(
+   x0, y0,
+            Math.Min(w, box.X + box.Width + pad) - x0,
+            Math.Min(h, box.Y + box.Height + pad) - y0);
 
         // 最后一道闸：CroppedBitmap 对越界/非正尺寸直接抛
       // "Value does not fall within the expected range"，宁可原图也不让它炸整条提取链。

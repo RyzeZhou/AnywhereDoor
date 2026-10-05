@@ -12,6 +12,14 @@
 
     <!-- 字号（DIP，1pt = 1.333 DIP）。正文 12 = 9pt，与资源管理器同档；磁贴标签 11 = 8.25pt -->
     <sys:Double x:Key="Font.Size.Primary">12</sys:Double>
+    <!-- 列表行条目名：比 Primary 大 1pt。
+单开令牌而不直接改 Primary —— Primary 被按钮、输入框、菜单等共用，
+         改它会把整屏字号都抬起来，这里只该动列表行。 -->
+    <sys:Double x:Key="Font.Size.RowName">13</sys:Double>
+    <!-- 条目名最多三行的高度上限。13pt 字体行高约 17，三行 ≈ 51，留 54 有点余量。
+         为什么给上限：TextWrapping="Wrap" 不设上限时长路径能把行撑到十几行，
+         列表就散了。三行足够放下常见的"目录 + 文件名"组合。 -->
+    <sys:Double x:Key="Row.Name.MaxHeight">54</sys:Double>
     <sys:Double x:Key="Font.Size.TileLabel">11</sys:Double>
     <sys:Double x:Key="Font.Size.Title">13</sys:Double>
     <sys:Double x:Key="Font.Size.Status">11.5</sys:Double>
@@ -55,9 +63,8 @@
     <!-- 磁贴悬停的悬浮阴影：平时不给（几十块磁贴常驻特效费 GPU），悬停才挂 -->
     <DropShadowEffect x:Key="TileShadow" BlurRadius="10" ShadowDepth="2" Direction="270"
                       Opacity="0.18" Color="#FF1A1A1A"/>
-    <!-- 图标底卡的常驻轻阴影：比磁贴阴影浅一档，只给"层次"不给"悬浮" -->
-    <DropShadowEffect x:Key="TileIconShadow" BlurRadius="5" ShadowDepth="1" Direction="270"
-                      Opacity="0.14" Color="#FF1A1A1A"/>
+    <!-- 原先这里还有 TileIconShadow（图标底卡的常驻轻阴影）。
+         白卡已去掉（磁贴本身就是卡片，不需要"框中框"），它成了孤儿令牌，一并删掉。 -->
 
     <Duration x:Key="Anim.Fast">0:0:0.08</Duration>
 
