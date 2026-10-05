@@ -63,19 +63,24 @@ public ImageSource? IconImage
     }
 
     /// <summary>
-    /// 读当前档位的磁贴/图标尺寸，算出标签能占的高度。
+    /// 标签**固定**高度（不是上限！）。
     ///
-    /// 下限不是"够一行"而是**够两行**（<see cref="SettingsStore.TileLabelLines"/>）——
- /// 长应用名（"7-Zip ZS File Manager"）换行到第二行是常态，只给一行等于没开换行。
-    /// 档位表已按"图标 + 2 行 + 留边"配好磁贴边长，这里是兜底：
-    /// 万一资源被外部改小，宁可标签稍微溢出也要保住第二行。
+    /// 之前用 <c>MaxHeight</c> 是错的：MaxHeight 只限制"最多多高"，**不保证高度**。
+    /// 于是单行名字（"计算器"）只占 15.96 DIP、两行的占 31.92，StackPanel 随之收缩，
+    /// 磁贴高度跟着变 —— 实测同一行里"计算器"矮、"7-Zip ZS File Manager" 高，
+    /// 参差不齐。固定成"按行数算满"才能让所有磁贴一样高。
+    ///
+    /// 行高是**实测值**不是估算：12 DIP + 中英混排（Segoe UI Variable / 微软雅黑）
+ /// 单行实测 15.96 DIP（估算值 16.2 偏大 0.24，两行就差 0.5）。
+    /// 详见 <see cref="SettingsStore.TileLineHeight"/>。
     /// </summary>
     private double ComputeLabelMaxHeight()
     {
         var tile = ReadResource("Tile.Size", 84.0);
         var icon = ReadResource("Tile.Icon", 48.0);
         var lines = SettingsStore.TileLabelLines * SettingsStore.TileLineHeight;
-        return Math.Max(lines, tile - icon - SettingsStore.TileChrome);
+        // 取"按行数算满"与"磁贴剩余空间"的较小者：既保证等高，又不超出磁贴。
+        return Math.Min(lines, tile - icon - SettingsStore.TileChrome);
     }
 
     private double ReadResource(string key, double fallback)

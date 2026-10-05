@@ -145,11 +145,12 @@ FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
                                Foreground="{StaticResource Brush.Text.Tertiary}"
                                Margin="10,0,0,0" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" MaxWidth="300"/>
-        <!-- 名字：13pt、最多三行。不设 TextTrimming：WPF 里它优先级高于 TextWrapping，设了就强制单行、换行失效 -->
+      设了就强制单行、换行失效。 -->
         <TextBlock Text="{Binding Entry.Name}" VerticalAlignment="Center"
  FontSize="{StaticResource Font.Size.RowName}"
     Foreground="{StaticResource Brush.Text.Primary}"
-      TextWrapping="Wrap" MaxHeight="{StaticResource Row.Name.MaxHeight}"/>
+        TextWrapping="Wrap"
+    Height="{StaticResource Row.Name.MaxHeight}"/>
                     <!-- 失效行：名字后缀一句原因，比只看图标明显（列表行没有角标位） -->
                     <TextBlock Text="{Binding MissingReason}" VerticalAlignment="Center"
                                FontSize="{StaticResource Font.Size.Status}"
@@ -475,10 +476,13 @@ FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
             Visibility="{Binding MissingBadgeVisibility}"
          ToolTip="{Binding MissingReason}"/>
         </Grid>
+  <!-- 标签用固定 Height 而非 MaxHeight：MaxHeight 只限上限、不保证高度，
+   单行名字会让 StackPanel 收缩、磁贴随之变矮（同一行参差不齐）。
+    固定成"按行数算满"才能让所有磁贴等高。 -->
                                                     <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
                                                            Foreground="{StaticResource Brush.Text.Primary}"
                                                           TextAlignment="Center" TextWrapping="Wrap"
-                                                                MaxHeight="{Binding TileLabelMaxHeight}"
+                 Height="{Binding TileLabelMaxHeight}"
                                                        Margin="2,0,2,0"/>
                                                 </StackPanel>
                                             </Grid>

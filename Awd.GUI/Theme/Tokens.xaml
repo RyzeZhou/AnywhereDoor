@@ -16,10 +16,11 @@
 但**必须与 Font.Size.TileLabel 一致** —— 同屏两处名字字号不同会很怪。
          单开令牌而不直接改 Primary：Primary 被按钮/输入框/菜单共用，改它会抬起来整屏。 -->
     <sys:Double x:Key="Font.Size.RowName">12</sys:Double>
-    <!-- 条目名最多三行的高度上限。12 DIP 字号行高约 16.2，三行 = 48.6，取 50 留余量。
+    <!-- 条目名三行的**固定**高度。12 DIP 实测单行 15.96（见 SettingsStore.TileLineHeight），
+  三行 = 47.88，取 48。用固定而非 MaxHeight：只限上限的话单行名字会让行高参差。
          为什么给上限：TextWrapping="Wrap" 不设上限时长路径能把行撑到十几行，
          列表就散了。三行足够放下常见的"目录 + 文件名"组合。 -->
-    <sys:Double x:Key="Row.Name.MaxHeight">50</sys:Double>
+    <sys:Double x:Key="Row.Name.MaxHeight">48</sys:Double>
     <!-- 磁贴标签与列表行统一 12 DIP（=9pt）。用户实测 13 "偏大了"后下调。
          两处仍须统一 —— 同一屏里"列表里的名字"和"磁贴上的名字"
          看着像两种字号会很怪。

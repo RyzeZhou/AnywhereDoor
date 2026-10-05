@@ -76,7 +76,7 @@ public sealed class Settings
     public static readonly (double Tile, double Icon, string Label)[] TileScales =
     {
         (0, 0, ""),       // 占位：索引 0 不表示任何档
-        (72, 36, "小"),         // 36 图标 + 32.4 标签 + 4 留边
+        (72, 36, "小"),         // 36 图标 + 31.92 标签 + 4 留边
         (84, 48, "中"),
         (98, 62, "大"),
         (114, 78, "超大"),
@@ -84,7 +84,17 @@ public sealed class Settings
     };
 
     /// <summary>标签可用高度 = 磁贴 − 图标 − 上下留边。13 DIP 字号的行高约 17.5。</summary>
-    public const double TileLineHeight = 16.2;   // 12 DIP × 1.346（与 13→17.5 同比例）
+    /// <summary>
+    /// 12 DIP 字号的**实测**单行高度（不是估算）。
+    /// 探针量法：TextBlock + 本项目字体（Segoe UI Variable Text / 微软雅黑 混排）
+    /// → Measure 后读 DesiredSize.Height。12 DIP = 15.96，13 DIP = 17.29。
+    ///
+    /// 为什么必须实测：行高由**字体的 ascent+descent+linegap** 决定，
+    /// 中英混排还要取两种字体里更大的那个 —— 靠"字号 × 系数"估不准。
+    /// 之前估 16.2 就偏大 0.24 DIP（两行差 0.5），累积起来会让标签被磁贴裁掉。
+    /// 换字体或改字号后**必须重量**。
+    /// </summary>
+    public const double TileLineHeight = 15.96;
 
     /// <summary>上下留边合计（图标区 Margin="0,2,0,2" → 2+2=4；再留一点呼吸取 4）。</summary>
     public const double TileChrome = 4;
