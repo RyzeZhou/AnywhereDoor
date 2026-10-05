@@ -37,11 +37,11 @@
          "'32'不是 Height 的有效值"（US Tokens.xaml 里记录过的实测坑，勿改回） -->
     <GridLength x:Key="Row.Header">32</GridLength>
     <GridLength x:Key="Row.Status">24</GridLength>
-    <!-- 磁贴尺寸初值，须与 SettingsStore.TileScales 的「中」档一致（84/48）——
+    <!-- 磁贴尺寸初值，须与 SettingsStore.TileScales 的「中」档一致（86/48）——
          启动时 ApplyTileIconScaleAtStartup 会用设置里的档位覆盖它们，
          这里只在"设置缺失/损坏"时兜底。
-         84 = 48 图标 + 2 行 12 DIP 标签(32.4) + 留边 4。 -->
-    <sys:Double x:Key="Tile.Size">84</sys:Double>
+         86 = 48 图标 + 2 行 12 DIP 标签(31.92) + 图标边距4 + 边框2 + 余量。 -->
+    <sys:Double x:Key="Tile.Size">86</sys:Double>
     <sys:Double x:Key="Tile.Icon">48</sys:Double>
     <sys:Double x:Key="Tile.ListIcon">20</sys:Double>
     <Thickness x:Key="Tile.Margin">3</Thickness>

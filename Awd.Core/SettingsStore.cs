@@ -75,32 +75,51 @@ public sealed class Settings
     /// </summary>
     public static readonly (double Tile, double Icon, string Label)[] TileScales =
     {
-        (0, 0, ""),       // 占位：索引 0 不表示任何档
-        (72, 36, "小"),         // 36 图标 + 31.92 标签 + 4 留边
-        (84, 48, "中"),
-        (98, 62, "大"),
-        (114, 78, "超大"),
-        (136, 100, "巨缩略"),   // 接近资源管理器的"超大图标"
+        (0, 0, ""),           // 占位：索引 0 不表示任何档
+        (74, 36, "小"),      // 36 + 37.92 → 74
+        (86, 48, "中"),      // 48 + 37.92 → 86
+        (100, 62, "大"),     // 62 + 37.92 → 100
+        (116, 78, "超大"),   // 78 + 37.92 → 116
+        (138, 100, "巨缩略"), // 100 + 37.92 → 138
     };
 
-    /// <summary>标签可用高度 = 磁贴 − 图标 − 上下留边。13 DIP 字号的行高约 17.5。</summary>
-    /// <summary>
+  /// <summary>
     /// 12 DIP 字号的**实测**单行高度（不是估算）。
-    /// 探针量法：TextBlock + 本项目字体（Segoe UI Variable Text / 微软雅黑 混排）
-    /// → Measure 后读 DesiredSize.Height。12 DIP = 15.96，13 DIP = 17.29。
-    ///
+    /// 量法：TextBlock + 本项目真实字体（Segoe UI Variable Text / 微软雅黑 混排）
+    /// → Measure 后读 DesiredSize.Height。实测 12 DIP = 15.96，13 DIP = 17.29。
+ ///
     /// 为什么必须实测：行高由**字体的 ascent+descent+linegap** 决定，
-    /// 中英混排还要取两种字体里更大的那个 —— 靠"字号 × 系数"估不准。
-    /// 之前估 16.2 就偏大 0.24 DIP（两行差 0.5），累积起来会让标签被磁贴裁掉。
+    /// 中英混排还要在两种字体里取更大的那个 —— 靠"字号 × 系数"估不准
+    /// （曾估 16.2，偏大 0.24，两行就差 0.5，累积起来直接裁字）。
     /// 换字体或改字号后**必须重量**。
     /// </summary>
     public const double TileLineHeight = 15.96;
 
-    /// <summary>上下留边合计（图标区 Margin="0,2,0,2" → 2+2=4；再留一点呼吸取 4）。</summary>
+    /// <summary>标签最大行数（换行上限）。2 行 = 常见长名能放下，超出的被裁。</summary>
+    public const int TileLabelLines = 2;
+
+    /// <summary>
+    /// 磁贴里除图标与标签外的固定开销（DIP）：图标区 <c>Margin="0,2,0,2"</c>。
+    ///
+ /// 边长需求公式：<c>图标 + TileChrome + 行数 × 行高 + TileBorder</c>。
+    /// 探针实测 48 + 4 + 31.92 + 2 = 85.92 → 边长 86。
+    ///
+    /// **以前漏算了 <see cref="TileBorder"/> 那 2 DIP**，磁贴比实际需要少2，
+    /// 表现为两行标签第二行**底部被裁**（用户截图实测差 1.92 DIP）。
+/// 修的时候顺手把公式提成方法，别再手算 —— 算错一次就裁字一次。
+    /// </summary>
     public const double TileChrome = 4;
 
-  /// <summary>标签最大行数（换行上限）。2 行 = 常见长名能放下，超出的被裁。</summary>
-    public const int TileLabelLines = 2;
+    /// <summary>外层 Border 1px 边框占掉的上下高度（2 DIP = 上下各 1）。</summary>
+    public const double TileBorder = 2;
+
+    /// <summary>
+    /// 某档位装下"图标 + <see cref="TileLabelLines"/> 行标签"所需的磁贴边长。
+    /// 档位表就是照这个算的（再向上取偶数）。
+    /// 探针实测 48 图标 + 4 图标边距 + 31.92 标签 + 2 边框 = 85.92 → 取 86。
+    /// </summary>
+    public static double RequiredTileSide(double icon)
+        => icon + TileChrome + TileLabelLines * TileLineHeight + TileBorder;
 
     /// <summary>默认档位（中）。</summary>
     public const int DefaultTileIconScale = 2;

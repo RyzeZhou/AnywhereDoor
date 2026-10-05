@@ -76,7 +76,7 @@ public ImageSource? IconImage
     /// </summary>
     private double ComputeLabelMaxHeight()
     {
-        var tile = ReadResource("Tile.Size", 84.0);
+        var tile = ReadResource("Tile.Size", 86.0);
         var icon = ReadResource("Tile.Icon", 48.0);
         var lines = SettingsStore.TileLabelLines * SettingsStore.TileLineHeight;
         // 取"按行数算满"与"磁贴剩余空间"的较小者：既保证等高，又不超出磁贴。
