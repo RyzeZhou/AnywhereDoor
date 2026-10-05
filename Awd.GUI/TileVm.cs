@@ -15,21 +15,19 @@ public sealed class TileVm : INotifyPropertyChanged
 {
     public AppEntry Entry { get; }
 
-    public TileVm(AppEntry entry) => Entry = entry;
-
     private ImageSource? _iconImage;
 
-    public ImageSource? IconImage
+public ImageSource? IconImage
     {
         get => _iconImage;
         private set
-        {
-            _iconImage = value;
-            Raise(nameof(IconImage));
-            Raise(nameof(IconVisibility));
+   {
+       _iconImage = value;
+       Raise(nameof(IconImage));
+      Raise(nameof(IconVisibility));
             Raise(nameof(PlaceholderVisibility));
         }
-    }
+ }
 
     public Visibility IconVisibility => _iconImage == null ? Visibility.Collapsed : Visibility.Visible;
     public Visibility PlaceholderVisibility => _iconImage == null ? Visibility.Visible : Visibility.Collapsed;
@@ -48,6 +46,35 @@ public sealed class TileVm : INotifyPropertyChanged
 
     /// <summary>整块磁贴压暗，失效与有效一眼能分开（只看图标容易漏看）。</summary>
     public double TileOpacity => IsMissing ? 0.45 : 1.0;
+
+    /// <summary>
+    /// 标签可用高度 = 磁贴高 − 图标槽位 − 上下留边。
+    /// 不能写死（原 30 是配 84磁贴 / 44 图标算的）：换档后图标变大，留给文字的空间就变少，
+    /// 写死会让长名字被截成半行（"7-Zip ZS File Manager" 只剩 "Manager"）。
+    ///
+    /// 构造时从应用资源现算，所以四个创建点都不用关心 —— 漏一处就有一处标签被截。
+    /// </summary>
+    public double TileLabelMaxHeight { get; }
+
+    public TileVm(AppEntry entry)
+    {
+        Entry = entry;
+        TileLabelMaxHeight = ComputeLabelMaxHeight();
+    }
+
+    /// <summary>读当前档位的磁贴/图标尺寸，算出标签能占的高度（下限 14，够一行字）。</summary>
+    private double ComputeLabelMaxHeight()
+    {
+        var tile = ReadResource("Tile.Size", 84.0);
+        var icon = ReadResource("Tile.Icon", 44.0);
+        return Math.Max(14, tile - icon - 16);
+    }
+
+    private double ReadResource(string key, double fallback)
+    {
+        var v = Application.Current?.TryFindResource(key);
+        return v is double d ? d : fallback;
+    }
 
     /// <summary>体检一次，结果缓存进 VM：加载时统一跑一遍，别在模板里反复问文件系统。</summary>
     public void RefreshHealth()
@@ -109,7 +136,7 @@ public sealed class TileVm : INotifyPropertyChanged
                 img = Decode(Entry.IconPath, px); // 拿到闸后复查，可能别的磁贴刚提取完
                 if (img == null)
                 {
-                    var probe = await Task.Run(() => IconCache.Extract(Entry.Target, 256));
+                    var probe = await Task.Run(() => IconCache.Extract(Entry.Target));
                     Entry.IconPath = probe.CachePath;
                     persist(Entry);
                     img = Decode(Entry.IconPath, px);

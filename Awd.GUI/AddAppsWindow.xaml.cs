@@ -146,7 +146,7 @@ public partial class AddAppsWindow : Window
             try
             {
                 // Extract 自带缓存命中短路
-                entry.IconPath = (await Task.Run(() => IconCache.Extract(row.App.Target, 256))).CachePath;
+                entry.IconPath = (await Task.Run(() => IconCache.Extract(row.App.Target))).CachePath;
             }
             catch (Exception ex)
             {

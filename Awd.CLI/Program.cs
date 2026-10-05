@@ -192,7 +192,7 @@ internal static class Program
         var p = Parse(args);
         var spec = p.Positional.FirstOrDefault()
             ?? throw new InvalidOperationException("缺少目标（路径 / AUMID / @id）");
-        var size = p.IntOption("size", 256);
+        var size = p.IntOption("size", IconCache.DefaultSize);
 
         var app = ResolveEntry(spec, lookupName: true);
         var result = IconCache.Extract(app.Target, size);
@@ -206,7 +206,7 @@ internal static class Program
     private static int CmdIcons(string[] args)
     {
         var p = Parse(args);
-        var size = p.IntOption("size", 256);
+        var size = p.IntOption("size", IconCache.DefaultSize);
         var find = p.Option("find");
         var kind = p.Option("kind");
         var limit = p.IntOption("limit", 0);
@@ -851,7 +851,7 @@ internal static class Program
     {
         try
         {
-            var r = IconCache.Extract(entry.Target, 256);
+            var r = IconCache.Extract(entry.Target);
             Console.WriteLine($"  图标 {r.NaturalWidth}x{r.NaturalHeight} -> {r.CachePath}");
             return r.CachePath;
         }

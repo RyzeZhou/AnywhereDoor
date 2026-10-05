@@ -33,6 +33,15 @@
         </RadioButton>
 
         <Separator Margin="0,12,0,10"/>
+     <TextBlock Text="程序页图标大小" FontSize="{StaticResource Font.Size.Primary}"
+        Foreground="{StaticResource Brush.Text.Secondary}" Margin="0,0,0,2"/>
+        <TextBlock Text="参照资源管理器的图标档位；换档后图标与磁贴一起变大"
+  FontSize="{StaticResource Font.Size.Status}"
+        Foreground="{StaticResource Brush.Text.Tertiary}" TextWrapping="Wrap" Margin="0,0,0,6"/>
+     <ComboBox x:Name="CbIconScale" SelectionChanged="OnIconScaleChanged"
+   Height="26" FontSize="{StaticResource Font.Size.Primary}"/>
+
+        <Separator Margin="0,12,0,10"/>
         <TextBlock Text="当前地图" FontSize="{StaticResource Font.Size.Primary}"
                    Foreground="{StaticResource Brush.Text.Secondary}" Margin="0,0,0,6"/>
         <DockPanel LastChildFill="False">

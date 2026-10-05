@@ -1,4 +1,6 @@
+using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using Awd.Core;
 
 namespace Awd.GUI;
@@ -16,11 +18,26 @@ public partial class SettingsWindow : Window
     public SettingsWindow(SettingsStore.Settings current, string activeMapName)
     {
         InitializeComponent();
-        _activeMap = activeMapName;
-        Result = new SettingsStore.Settings { DoubleClickOpen = current.DoubleClickOpen };
+     _activeMap = activeMapName;
+      Result = new SettingsStore.Settings
+     {
+            DoubleClickOpen = current.DoubleClickOpen,
+      TileIconScale = SettingsStore.ClampScale(current.TileIconScale),
+        };
         RbSingle.IsChecked = !current.DoubleClickOpen;
         RbDouble.IsChecked = current.DoubleClickOpen;
         MapNameText.Text = activeMapName;
+
+      // 档位下拉：文案带上像素数，用户才知道"大"到底多大
+     CbIconScale.ItemsSource = Enumerable.Range(1, SettingsStore.TileScales.Length - 1)
+  .Select(i => $"{SettingsStore.TileScales[i].Label}　{SettingsStore.TileScales[i].Icon:0} DIP");
+        CbIconScale.SelectedIndex = Result.TileIconScale - 1;
+    }
+
+    private void OnIconScaleChanged(object sender, SelectionChangedEventArgs e)
+    {
+  if (CbIconScale == null || CbIconScale.SelectedIndex < 0) return;   // InitializeComponent 期间
+   Result.TileIconScale = CbIconScale.SelectedIndex + 1;
     }
 
     private void OnModeChanged(object sender, RoutedEventArgs e)

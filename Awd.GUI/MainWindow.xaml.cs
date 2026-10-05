@@ -29,8 +29,11 @@ public partial class MainWindow : Window
     /// <summary>图标提取并发闸：COM 提取不便宜，别让几十块磁贴同时冲进 IconCache。</summary>
     private static readonly SemaphoreSlim IconGate = new(2, 2);
 
-    /// <summary>磁贴图标槽位的 DIP 尺寸，与 Theme/Tokens.xaml 的 Tile.Icon 保持一致。</summary>
-    private const double TileIconDip = 44;
+    /// <summary>
+    /// 图标槽位的 DIP 尺寸。随图标档位变（见 <see cref="ApplyTileIconScale"/>），
+    /// 所以不是 const。默认值取SettingsStore 的「中」档，与 Tokens.xaml 里的初值一致。
+    /// </summary>
+    private double TileIconDip = SettingsStore.TileScales[SettingsStore.DefaultTileIconScale].Icon;
 
     /// <summary>分组筛选谓词：null=全部；""=未分类；其他=分组名精确匹配。</summary>
     private static bool GroupMatch(string? group, string? match)
@@ -134,10 +137,23 @@ public partial class MainWindow : Window
         RootGrid.AddHandler(DragDrop.DragLeaveEvent, new DragEventHandler(OnRootDragLeave), true);
 
         LoadSites();
+        ApplyTileIconScaleAtStartup();
         ReloadFromStore();
-        // 启动时活动地图坏了、临时换了一张 —— 得在状态条上说清楚，别让人以为地图凭空变了
-        if (App.StartupNote.Length > 0) SetStatus(App.StartupNote, warn: true);
+   // 启动时活动地图坏了、临时换了一张 —— 得在状态条上说清楚，别让人以为地图凭空变了
+  if (App.StartupNote.Length > 0) SetStatus(App.StartupNote, warn: true);
     }
+
+    /// <summary>
+    /// 启动时把图标档位写进资源。必须在 ReloadFromStore 之前 ——
+ /// 首次解码要按最终槽位的物理像素来，否则第一屏图标会先按 44 DIP 解一遍再被拉伸。
+    /// </summary>
+    private void ApplyTileIconScaleAtStartup()
+    {
+  var (tile, icon, _) = SettingsStore.TileScales[SettingsStore.ClampScale(_settings.TileIconScale)];
+        Resources["Tile.Size"] = tile;
+        Resources["Tile.Icon"] = icon;
+    TileIconDip = icon;
+         }
 
     /// <summary>Win11 的圆角窗口；Win10 无此属性，安静退化直角+描边。</summary>
     protected override void OnSourceInitialized(EventArgs e)
@@ -1445,25 +1461,66 @@ public partial class MainWindow : Window
 
     // ================== 窗口 ==================
 
-    private void OnSettingsClick(object sender, RoutedEventArgs e)
+private void OnSettingsClick(object sender, RoutedEventArgs e)
     {
-        var dlg = new SettingsWindow(_settings, _doc.Name) { Owner = this };
-        dlg.ShowDialog();
+      var dlg = new SettingsWindow(_settings, _doc.Name) { Owner = this };
+     dlg.ShowDialog();
         if (dlg.DialogResult != true) return;
-        _settings.DoubleClickOpen = dlg.Result.DoubleClickOpen;
-        SettingsStore.Save(_settings);
+
+      bool scaleChanged = _settings.TileIconScale != dlg.Result.TileIconScale;
+     _settings.DoubleClickOpen = dlg.Result.DoubleClickOpen;
+    _settings.TileIconScale = dlg.Result.TileIconScale;
+   SettingsStore.Save(_settings);
+        if (scaleChanged) ApplyTileIconScale();
+
         if (dlg.RenamedMapTo != null)
         {
-            _doc.Name = dlg.RenamedMapTo;
-            _docPath = MapStore.PathOf(dlg.RenamedMapTo);   // Rename 已把文件挪到新落点
-            ReloadFromStore();
+      _doc.Name = dlg.RenamedMapTo;
+ _docPath = MapStore.PathOf(dlg.RenamedMapTo);   // Rename 已把文件挪到新落点
+      ReloadFromStore();
             SetStatus($"地图已改名为「{dlg.RenamedMapTo}」");
+      return;
+        }
+
+  if (scaleChanged)
+        {
+            SetStatus($"图标已改为「{TileScaleLabel()}」档");
             return;
         }
-        SetStatus(_settings.DoubleClickOpen
+ SetStatus(_settings.DoubleClickOpen
             ? "已改为双击打开 —— 单击只看目标"
             : "已改为单击打开 —— 手机习惯");
     }
+
+    /// <summary>
+    /// 把图标档位写进应用级资源，磁贴尺寸/图标槽位随之变（XAML 那三处用 DynamicResource）。
+    /// 换档后要重载图标：旧档位解出来的 BitmapSource 尺寸已经钉死，
+    /// 直接换容器尺寸会被拉伸 —— 必须重新按新物理像素解码。
+    /// </summary>
+private void ApplyTileIconScale()
+  {
+     var (tile, icon, _) = SettingsStore.TileScales[SettingsStore.ClampScale(_settings.TileIconScale)];
+        Resources["Tile.Size"] = tile;
+        Resources["Tile.Icon"] = icon;
+        TileIconDip = icon;   // 解码要跟着走：物理像素 = icon DIP × DPI
+
+// 资源已换，但 TileVm 的标签高度是构造时算的 —— 重建磁贴集合，让它们重算。
+  // 重建的是轻量 VM（Entry 本来就还在），图标重新走 LoadIconAsync。
+      var snapshot = _pages.Select(p => p.ToList()).ToList();
+        for (int i = 0; i < _pages.Length; i++)
+        {
+     _pages[i].Clear();
+    foreach (var vm in snapshot[i]) _pages[i].Add(new TileVm(vm.Entry));
+        }
+        RefreshChrome();
+
+        foreach (var page in _pages)
+      foreach (var t in page)
+      _ = t.LoadIconAsync(IconGate, PersistEntry, DpiScale.ToPixels(TileIconDip));
+    }
+
+    private string TileScaleLabel()
+        => SettingsStore.TileScales[SettingsStore.ClampScale(_settings.TileIconScale)].Label;
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 

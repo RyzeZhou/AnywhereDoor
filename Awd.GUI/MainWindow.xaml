@@ -28,8 +28,8 @@
     <Window.Resources>
         <!-- 磁贴（程序页）：84×84，单击=启动，拖拽=换位 -->
         <Style x:Key="TileStyle" TargetType="Border">
-            <Setter Property="Width" Value="{StaticResource Tile.Size}"/>
-            <Setter Property="Height" Value="{StaticResource Tile.Size}"/>
+            <Setter Property="Width" Value="{DynamicResource Tile.Size}"/>
+            <Setter Property="Height" Value="{DynamicResource Tile.Size}"/>
             <Setter Property="Margin" Value="{StaticResource Tile.Margin}"/>
             <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
             <Setter Property="Background" Value="{StaticResource Brush.Surface.Card}"/>
@@ -421,7 +421,7 @@
                                             <Grid Opacity="{Binding TileOpacity}">
                                                 <Border Style="{StaticResource TileShadowLayer}"/>
                                                 <StackPanel>
-                                                    <Grid Height="{StaticResource Tile.Icon}" Width="{StaticResource Tile.Icon}"
+                                                    <Grid Height="{DynamicResource Tile.Icon}" Width="{DynamicResource Tile.Icon}"
                                                           HorizontalAlignment="Center" Margin="0,8,0,2">
                                                         <!-- 图标底卡：白色小圆角 + 常驻轻阴影，透明底图标放上面有层次 -->
                                                         <Border Background="{StaticResource Brush.Surface.Card}"
@@ -445,7 +445,8 @@
                                                     <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
                                                                Foreground="{StaticResource Brush.Text.Primary}"
                                                                TextAlignment="Center" TextWrapping="Wrap"
-                                                               MaxHeight="30" TextTrimming="CharacterEllipsis"
+                                                               MaxHeight="{Binding TileLabelMaxHeight}"
+                                                               TextTrimming="CharacterEllipsis"
                                                                Margin="2,0,2,0"/>
                                                 </StackPanel>
                                             </Grid>
