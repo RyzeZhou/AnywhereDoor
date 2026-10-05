@@ -162,10 +162,16 @@ public partial class MainWindow : Window
     /// </summary>
 private void RestoreWindowGeometry()
     {
-        if (SettingsStore.HasWindowGeometry(_settings))
-        {
-            Width = _settings.WindowW;
-            Height = _settings.WindowH;
+     if (SettingsStore.HasWindowGeometry(_settings))
+    {
+     var w = _settings.WindowW;
+            var h = _settings.WindowH;
+            // 上次退出时屏幕可能比现在小（拔了外接屏、换了笔记本屏），
+    // 所以复原时也要钳一次，别让窗口一大就顶到屏外下不来。
+            var clamped = ClampToWorkArea(ref w, ref h);
+      Width = w;
+    Height = h;
+    if (clamped) SetStatus("上次窗口比现在的屏幕大，已缩到屏幕范围内", warn: true);
         }
         else
         {
@@ -194,13 +200,40 @@ private void RestoreWindowGeometry()
     /// <summary>把窗口摆到当前屏幕的工作区中央（不依赖 WindowStartupLocation）。</summary>
     private void CenterOnScreen()
     {
-        // 用当前显示器的可用区而不是整个屏幕：任务栏/ Dock 那边不该压着
         var area = SystemParameters.WorkArea;
         // 构造期调用时 Width/Height 可能还没生效（还没布局），用 0 会算出负的 Left。
         var w = Width > 0 ? Width : SettingsStore.DefaultWindowW;
         var h = Height > 0 ? Height : SettingsStore.DefaultWindowH;
-        Left = area.Left + (area.Width - w) / 2;
-        Top = area.Top + (area.Height - h) / 2;
+      Left = area.Left + (area.Width - w) / 2;
+    Top = area.Top + (area.Height - h) / 2;
+    }
+
+  /// <summary>
+ /// 把宽高钳制到当前屏幕工作区之内，返回是否发生了钳制。
+    ///
+    /// 为什么必须有：<see cref="WindowPresets"/> 与记忆的尺寸都是 **DIP**，
+ /// 而工作区（<c>SystemParameters.WorkArea</c>）也是 DIP，两边单位一致——
+    /// 但"物理上放不下"这件事在 DIP 里看不出来。实测：
+    /// 1080p + 150% 缩放时，"高 680×760" = 1020×1140 物理像素 > 工作区 1920×1040；
+    /// 200% 时连"宽 900×560" 也会超。窗口一大就顶到屏幕外下边够不着。
+    ///
+/// 只缩不放：小于工作区就保持原样（用户可能故意要小窗）。
+    /// </summary>
+    private static bool ClampToWorkArea(ref double w, ref double h)
+    {
+        var area = SystemParameters.WorkArea;
+     var clamped = false;
+        if (w > area.Width)
+        {
+        w = area.Width;
+       clamped = true;
+      }
+        if (h > area.Height)
+        {
+ h = area.Height;
+   clamped = true;
+        }
+   return clamped;
     }
 
     /// <summary>
@@ -1667,18 +1700,22 @@ private void ApplyTileIconScale()
     {
         if (sender is not MenuItem item || !int.TryParse(item.Tag as string, out var idx)) return;
         if (idx < 0) return;               // -1 = 最大化/还原那条，不在这张表里
-        if (idx >= WindowPresets.Length) return;
- var (_, w, h) = WindowPresets[idx];
+    if (idx >= WindowPresets.Length) return;
+        var preset = WindowPresets[idx];
 
-     // 从最大化切回来时要先恢复窗口态，否则设 Width/Height 不生效（对最大化窗口无效）
-      if (WindowState == WindowState.Maximized)
+        // 从最大化切回来时要先恢复窗口态，否则设 Width/Height 不生效（对最大化窗口无效）
+        if (WindowState == WindowState.Maximized)
             WindowState = WindowState.Normal;
+   var w = preset.W;
+      var h = preset.H;
+        var clamped = ClampToWorkArea(ref w, ref h);
         Width = w;
-        Height = h;
-    // 尺寸立刻存一份：用户点完预设就关窗时，OnClosing 存的也是这个尺寸，
+      Height = h;
+        // 点完预设立刻存：用户点完就关窗时，OnClosing 存的也是这个尺寸，
         // 但存早一点能保证"点完预设立刻崩了"也不丢
-    SaveWindowGeometry();
-     SetStatus($"窗口已设为 {WindowPresets[idx].Label}");
+        SaveWindowGeometry();
+        var note = clamped ? "（已缩到屏幕范围内）" : "";
+        SetStatus($"窗口已设为 {preset.Label}{note}");
     }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
