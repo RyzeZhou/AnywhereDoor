@@ -76,11 +76,11 @@ public sealed class Settings
     public static readonly (double Tile, double Icon, string Label)[] TileScales =
     {
         (0, 0, ""),           // 占位：索引 0 不表示任何档
-        (74, 36, "小"),      // 36 + 37.92 → 74
-        (86, 48, "中"),      // 48 + 37.92 → 86
-        (100, 62, "大"),     // 62 + 37.92 → 100
-        (116, 78, "超大"),   // 78 + 37.92 → 116
-        (138, 100, "巨缩略"), // 100 + 37.92 → 138
+    (82, 36, "小"),         // 36 + 45.92 → 82
+        (94, 48, "中"),         // 48 + 45.92 → 94
+        (108, 62, "大"),    // 62 + 45.92 → 108
+   (124, 78, "超大"),   // 78 + 45.92 → 124
+        (146, 100, "巨缩略"), // 100 + 45.92 → 146
     };
 
   /// <summary>
@@ -102,7 +102,7 @@ public sealed class Settings
     /// 磁贴里除图标与标签外的固定开销（DIP）：图标区 <c>Margin="0,2,0,2"</c>。
     ///
  /// 边长需求公式：<c>图标 + TileChrome + 行数 × 行高 + TileBorder</c>。
-    /// 探针实测 48 + 4 + 31.92 + 2 = 85.92 → 边长 86。
+    /// 探针实测"刚好装下"= 48 + 4 + 31.92 + 2 = 85.92；加 <see cref="TilePad"/> 余量 → 94。
     ///
     /// **以前漏算了 <see cref="TileBorder"/> 那 2 DIP**，磁贴比实际需要少2，
     /// 表现为两行标签第二行**底部被裁**（用户截图实测差 1.92 DIP）。
@@ -114,12 +114,24 @@ public sealed class Settings
     public const double TileBorder = 2;
 
     /// <summary>
+    /// 磁贴底部留的呼吸余量（DIP）。
+    ///
+    /// 为什么必须留：之前按"刚好装下"算，余量只有 0.08 DIP —— 等于没有。
+    /// 字体回退、字体缩放设置、行盒 leading 的细微差异都会把第二行裁掉，
+    /// 而这类差异**无法提前算准**（不同机器的 Segoe UI 版本、ClearType 设置、
+    /// 用户改过字体大小都会影响）。所以余量不是"浪费"，是**容错空间**。
+    ///
+    /// 8 DIP ≈ 半个字高：视觉上不显拥挤，又足够吸收上述偏差。
+    /// </summary>
+    public const double TilePad = 8;
+
+    /// <summary>
     /// 某档位装下"图标 + <see cref="TileLabelLines"/> 行标签"所需的磁贴边长。
     /// 档位表就是照这个算的（再向上取偶数）。
-    /// 探针实测 48 图标 + 4 图标边距 + 31.92 标签 + 2 边框 = 85.92 → 取 86。
+    /// 探针实测"刚好装下"= 48+4+31.92+2 = 85.92；加 <see cref="TilePad"/> 余量 → 94。
     /// </summary>
     public static double RequiredTileSide(double icon)
-        => icon + TileChrome + TileLabelLines * TileLineHeight + TileBorder;
+        => icon + TileChrome + TileLabelLines * TileLineHeight + TileBorder + TilePad;
 
     /// <summary>默认档位（中）。</summary>
     public const int DefaultTileIconScale = 2;
