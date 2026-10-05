@@ -128,17 +128,18 @@
                     </ContextMenu>
                 </Border.ContextMenu>
                 <DockPanel LastChildFill="True">
-            <!-- 列表行图标：同样不锁正方形。MinWidth/MinWidth 保住"小方块"的观感，
-宽图图标也能按原比例铺开；MaxWidth/MaxHeight 防止超大图撑破行高。 -->
-          <Grid DockPanel.Dock="Left" MinWidth="{StaticResource Tile.ListIcon}"
-      MinHeight="{StaticResource Tile.ListIcon}" MaxWidth="40" MaxHeight="40"
-     VerticalAlignment="Center">
-         <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
-              FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
-     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-      <Image Source="{Binding IconImage}" Stretch="Uniform"
-   Visibility="{Binding IconVisibility}"/>
-       </Grid>
+     <!-- 列表行图标：高度锁死（与磁贴同一个理由），宽度放开给宽图。
+     MinHeight 会让宽图把行撑高，整行列表就参差不齐了。 -->
+            <Grid DockPanel.Dock="Left" Height="{StaticResource Tile.ListIcon}"
+                  MaxWidth="40" VerticalAlignment="Center">
+           <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
+FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
+   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <!-- 宽度不设死：靠 DockPanel.Dock=Left 自然取内容宽（MaxWidth 封顶），
+     Stretch="Uniform" 保证不撑高也不变形 -->
+        <Image Source="{Binding IconImage}" Stretch="Uniform" MaxHeight="{StaticResource Tile.ListIcon}"
+     Visibility="{Binding IconVisibility}"/>
+    </Grid>
                     <TextBlock DockPanel.Dock="Right" Text="{Binding Entry.Target}"
                                FontSize="{StaticResource Font.Size.Status}"
                                Foreground="{StaticResource Brush.Text.Tertiary}"
@@ -448,18 +449,24 @@
                                             <Grid Opacity="{Binding TileOpacity}">
                                                 <Border Style="{StaticResource TileShadowLayer}"/>
                                                 <StackPanel>
- <Grid HorizontalAlignment="Center" Margin="0,8,0,2"
-       MinWidth="{DynamicResource Tile.Icon}" MinHeight="{DynamicResource Tile.Icon}">
-    <!-- 不再套白色图标卡：磁贴本身已经是圆角卡片，图标再套一层是"框中框"，
-            视觉上多一道边、图标显小。去掉后图标直接贴在磁贴上，更大更干净。
-  Width/Height 不锁死 —— 图标有的是方图有的是宽图，强行正方会留边或压扁。 -->
-             <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
-                 FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
-        Foreground="{StaticResource Brush.Text.Tertiary}"
+     <!-- 高度锁死，宽度放开。
+        为什么必须锁高：图标宽高比不统一（实测 7-Zip 99×82 宽>高、计算器 84×105 高>宽），
+       若用 MinHeight 让容器随内容长，宽图铺满 44 宽时只有 36 高，
+      Grid 变矮 → 下方文字跟着上移，结果各磁贴名字基线不在同一行
+            （"7-Zip ZS File…"比"计算器/日历"偏高）。
+        锁死高度后所有图标的**占位恒定**，名字自然对齐。
+        宽图靠 Stretch="Uniform" 在框内等比缩放，不变形也不撑高。 -->
+         <Grid Height="{DynamicResource Tile.Icon}" HorizontalAlignment="Center" Margin="0,8,0,2">
+        <!-- 不再套白色图标卡：磁贴本身已经是圆角卡片，图标再套一层是"框中框"，
+            视觉上多一道边、图标显小。去掉后图标直接贴在磁贴上，更大更干净。 -->
+         <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
+    FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
+     Foreground="{StaticResource Brush.Text.Tertiary}"
   Visibility="{Binding PlaceholderVisibility}" Margin="2"/>
-    <Image Source="{Binding IconImage}" Stretch="Uniform" MaxWidth="{DynamicResource Tile.Icon}"
-       MaxHeight="{DynamicResource Tile.Icon}"
-             Visibility="{Binding IconVisibility}" Margin="2"/>
+     <!-- 宽高都限在 Tile.Icon：等比缩放，宽图不撑高、也不溢出磁贴 -->
+    <Image Source="{Binding IconImage}" Stretch="Uniform"
+   MaxHeight="{DynamicResource Tile.Icon}" MaxWidth="{DynamicResource Tile.Icon}"
+      Visibility="{Binding IconVisibility}" Margin="2"/>
             <!-- 失效角标：红点挂在图标区右上角，一眼区分"坏了"和"还没图标" -->
      <Ellipse Width="9" Height="9" Fill="{StaticResource Brush.Danger}"
   HorizontalAlignment="Right" VerticalAlignment="Top"
