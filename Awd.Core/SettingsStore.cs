@@ -58,19 +58,33 @@ public sealed class Settings
     public static bool HasWindowPosition(Settings s)
         => s.WindowX != 0 || s.WindowY != 0;
 
-    /// <summary>图标档位表：档位序号 → (磁贴边长 DIP, 图标槽位 DIP, 说明)。</summary>
-    /// 索引 0 不用（0 = 未设置）。实测 shell 能精确返回任意请求尺寸
-  /// （探针验过 16/24/32/48/64/96/128/256 全部原样返回），所以档位纯粹由我们决定，
-    /// 缓存源图必须跟着档位走 —— 换档后旧尺寸的缓存要么重新生成，要么被拉伸。
+    /// <summary>
+    /// 图标档位表：档位序号 → (磁贴边长 DIP, 图标槽位 DIP, 说明)。
+    /// 索引 0 不用（0 = 未设置）。
+    ///
+    /// **磁贴边长不是随手定的**：它必须 = 图标 + 标签（2 行 × 15 DIP）+ 上下留边，
+    /// 否则名字放不下会被磁贴底边裁掉。旧表（84/48/100/64…）只给标签留了 20 DIP
+    /// ≈ 1 行，长名字一律换行后被裁 —— 实测 "7-Zip ZS File Manager" 的第二行
+    /// "Manager" 只露出上半截。
+    ///
+    /// 另：实测 shell 能精确返回任意请求尺寸（探针验过 16~256 全部原样返回），
+    /// 所以档位纯粹由我们决定。
+    /// </summary>
     public static readonly (double Tile, double Icon, string Label)[] TileScales =
     {
-        (0, 0, ""),              // 占位：索引 0 不表示任何档
-        (72, 32, "小"),    // 32 DIP ≈ 手机图标
-        (84, 48, "中"),           // 48 DIP
-        (100, 64, "大"),          // 64 DIP
-   (120, 88, "超大"),   // 88 DIP
-        (148, 120, "巨缩略"),     // 120 DIP，接近资源管理器的"超大图标"
+        (0, 0, ""),// 占位：索引 0 不表示任何档
+        (74, 32, "小"),         // 32 DIP 图标 + 2 行标签
+        (90, 44, "中"),         // 44 DIP
+        (108, 58, "大"),        // 58 DIP
+        (128, 74, "超大"),      // 74 DIP
+        (156, 96, "巨缩略"),    // 96 DIP，接近资源管理器的"超大图标"
     };
+
+    /// <summary>标签可用高度 = 磁贴 − 图标 − 上下留边。11 DIP 字号的行高约 15。</summary>
+    public const double TileChrome = 16;   // 上下留边合计
+
+    /// <summary>标签最大行数（换行上限）。2 行 = 常见长名能放下，超出的被裁。</summary>
+    public const int TileLabelLines = 2;
 
     /// <summary>默认档位（中）。</summary>
     public const int DefaultTileIconScale = 2;

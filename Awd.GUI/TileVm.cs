@@ -62,12 +62,19 @@ public ImageSource? IconImage
         TileLabelMaxHeight = ComputeLabelMaxHeight();
     }
 
-    /// <summary>读当前档位的磁贴/图标尺寸，算出标签能占的高度（下限 14，够一行字）。</summary>
+    /// <summary>
+    /// 读当前档位的磁贴/图标尺寸，算出标签能占的高度。
+    ///
+    /// 下限不是"够一行"而是**够两行**（<see cref="SettingsStore.TileLabelLines"/>）——
+ /// 长应用名（"7-Zip ZS File Manager"）换行到第二行是常态，只给一行等于没开换行。
+    /// 档位表已按"图标 + 2 行 + 留边"配好磁贴边长，这里是兜底：
+    /// 万一资源被外部改小，宁可标签稍微溢出也要保住第二行。
+    /// </summary>
     private double ComputeLabelMaxHeight()
     {
-        var tile = ReadResource("Tile.Size", 84.0);
+        var tile = ReadResource("Tile.Size", 90.0);
         var icon = ReadResource("Tile.Icon", 44.0);
-        return Math.Max(14, tile - icon - 16);
+        return Math.Max(SettingsStore.TileLabelLines * 15, tile - icon - SettingsStore.TileChrome);
     }
 
     private double ReadResource(string key, double fallback)

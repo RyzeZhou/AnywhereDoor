@@ -145,12 +145,11 @@ FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
                                Foreground="{StaticResource Brush.Text.Tertiary}"
                                Margin="10,0,0,0" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" MaxWidth="300"/>
-        <!-- 名字：13pt、最多三行（MaxHeight 按 13pt 行高 ×3 留富余，超出才截断） -->
+        <!-- 名字：13pt、最多三行。不设 TextTrimming：WPF 里它优先级高于 TextWrapping，设了就强制单行、换行失效 -->
         <TextBlock Text="{Binding Entry.Name}" VerticalAlignment="Center"
  FontSize="{StaticResource Font.Size.RowName}"
     Foreground="{StaticResource Brush.Text.Primary}"
-      TextWrapping="Wrap" MaxHeight="{StaticResource Row.Name.MaxHeight}"
-            TextTrimming="CharacterEllipsis"/>
+      TextWrapping="Wrap" MaxHeight="{StaticResource Row.Name.MaxHeight}"/>
                     <!-- 失效行：名字后缀一句原因，比只看图标明显（列表行没有角标位） -->
                     <TextBlock Text="{Binding MissingReason}" VerticalAlignment="Center"
                                FontSize="{StaticResource Font.Size.Status}"
@@ -476,11 +475,10 @@ FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
     ToolTip="{Binding MissingReason}"/>
      </Grid>
                                                     <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
-                                                               Foreground="{StaticResource Brush.Text.Primary}"
-                                                               TextAlignment="Center" TextWrapping="Wrap"
-                                                               MaxHeight="{Binding TileLabelMaxHeight}"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               Margin="2,0,2,0"/>
+                                                           Foreground="{StaticResource Brush.Text.Primary}"
+                                                          TextAlignment="Center" TextWrapping="Wrap"
+                                                                MaxHeight="{Binding TileLabelMaxHeight}"
+                                                       Margin="2,0,2,0"/>
                                                 </StackPanel>
                                             </Grid>
                                         </Border>
