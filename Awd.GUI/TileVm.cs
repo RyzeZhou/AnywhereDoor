@@ -72,7 +72,7 @@ public ImageSource? IconImage
     /// </summary>
     private double ComputeLabelMaxHeight()
     {
-        var tile = ReadResource("Tile.Size", 91.0);
+        var tile = ReadResource("Tile.Size", 84.0);
         var icon = ReadResource("Tile.Icon", 48.0);
         var lines = SettingsStore.TileLabelLines * SettingsStore.TileLineHeight;
         return Math.Max(lines, tile - icon - SettingsStore.TileChrome);
