@@ -448,32 +448,33 @@ FontSize="13" Foreground="{StaticResource Brush.Text.Tertiary}"
                                             <Grid Opacity="{Binding TileOpacity}">
                                                 <Border Style="{StaticResource TileShadowLayer}"/>
                                                 <StackPanel>
-     <!-- 高度锁死，宽度放开。
-        为什么必须锁高：图标宽高比不统一（实测 7-Zip 99×82 宽>高、计算器 84×105 高>宽），
-       若用 MinHeight 让容器随内容长，宽图铺满 44 宽时只有 36 高，
-      Grid 变矮 → 下方文字跟着上移，结果各磁贴名字基线不在同一行
-            （"7-Zip ZS File…"比"计算器/日历"偏高）。
-        锁死高度后所有图标的**占位恒定**，名字自然对齐。
-        宽图靠 Stretch="Uniform" 在框内等比缩放，不变形也不撑高。 -->
-         <Grid Height="{DynamicResource Tile.Icon}" HorizontalAlignment="Center" Margin="0,8,0,2">
-        <!-- 不再套白色图标卡：磁贴本身已经是圆角卡片，图标再套一层是"框中框"，
-            视觉上多一道边、图标显小。去掉后图标直接贴在磁贴上，更大更干净。 -->
+   <!-- 图标区：高度 = 槽位高，图标撑满，不留额外空白。
+        上下各 2 DIP 只是呼吸，不是"额外空间"；左右完全不留，宽图才能占满磁贴宽度。
+        锁死高度（而不是 MinHeight）是有原因的：图标宽高比不统一
+        （实测 7-Zip 99×82 宽>高、计算器 84×105 高>宽），
+        若用 MinHeight 让容器随内容长，宽图那格矮一截，下方名字就上移、基线错开。 -->
+        <Grid Height="{DynamicResource Tile.Icon}" HorizontalAlignment="Center" Margin="0,2,0,2">
+       <!-- 不套白色图标卡：磁贴本身是圆角卡片，图标再套一层是"框中框"，
+   多一道边且显小。 -->
          <TextBlock Text="{Binding GlyphChar}" FontFamily="{StaticResource Glyph.Font}"
-    FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
-     Foreground="{StaticResource Brush.Text.Tertiary}"
-  Visibility="{Binding PlaceholderVisibility}" Margin="2"/>
-     <!-- 宽高都限在 Tile.Icon：等比缩放，宽图不撑高、也不溢出磁贴 -->
-    <Image Source="{Binding IconImage}" Stretch="Uniform"
-   MaxHeight="{DynamicResource Tile.Icon}" MaxWidth="{DynamicResource Tile.Icon}"
-      Visibility="{Binding IconVisibility}" Margin="2"/>
-            <!-- 失效角标：红点挂在图标区右上角，一眼区分"坏了"和"还没图标" -->
-     <Ellipse Width="9" Height="9" Fill="{StaticResource Brush.Danger}"
-  HorizontalAlignment="Right" VerticalAlignment="Top"
-            Margin="0,-1,-1,0" Stroke="{StaticResource Brush.Surface}"
-     StrokeThickness="1.5"
-          Visibility="{Binding MissingBadgeVisibility}"
-    ToolTip="{Binding MissingReason}"/>
-     </Grid>
+           FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center"
+      Foreground="{StaticResource Brush.Text.Tertiary}"
+      Visibility="{Binding PlaceholderVisibility}"/>
+   <!-- 图标拉满槽位：MaxWidth/MaxHeight 都给槽位值 + Stretch=Uniform。
+  小图标被等比**放大**到槽位（用户要求"小图标也拉大"），
+    大图标等比缩到槽位内 —— 两种情况都占满同一块地方，名字基线也对齐。
+       源图是 512 档缓存，放大到巨缩略档也不糊。 -->
+            <Image Source="{Binding IconImage}" Stretch="Uniform"
+  MaxHeight="{DynamicResource Tile.Icon}" MaxWidth="{DynamicResource Tile.Icon}"
+            Visibility="{Binding IconVisibility}"/>
+      <!-- 失效角标：红点挂在磁贴右上角，一眼区分"坏了"和"还没图标" -->
+         <Ellipse Width="9" Height="9" Fill="{StaticResource Brush.Danger}"
+   HorizontalAlignment="Right" VerticalAlignment="Top"
+ Margin="0,-1,-1,0" Stroke="{StaticResource Brush.Surface}"
+   StrokeThickness="1.5"
+            Visibility="{Binding MissingBadgeVisibility}"
+         ToolTip="{Binding MissingReason}"/>
+        </Grid>
                                                     <TextBlock Text="{Binding Entry.Name}" FontSize="{StaticResource Font.Size.TileLabel}"
                                                            Foreground="{StaticResource Brush.Text.Primary}"
                                                           TextAlignment="Center" TextWrapping="Wrap"

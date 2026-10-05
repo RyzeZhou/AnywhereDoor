@@ -10,17 +10,20 @@
     <FontFamily x:Key="Font.Text">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI, Microsoft YaHei, SimSun</FontFamily>
     <FontFamily x:Key="Glyph.Font">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
-    <!-- 字号（DIP，1pt = 1.333 DIP）。正文 12 = 9pt，与资源管理器同档；磁贴标签 11 = 8.25pt -->
+    <!-- 字号（DIP，1pt = 1.333 DIP）。正文 12 = 9pt 与资源管理器同档；磁贴标签与列表行统一 13 = 9.75pt -->
     <sys:Double x:Key="Font.Size.Primary">12</sys:Double>
     <!-- 列表行条目名：比 Primary 大 1pt。
 单开令牌而不直接改 Primary —— Primary 被按钮、输入框、菜单等共用，
          改它会把整屏字号都抬起来，这里只该动列表行。 -->
     <sys:Double x:Key="Font.Size.RowName">13</sys:Double>
-    <!-- 条目名最多三行的高度上限。13pt 字体行高约 17，三行 ≈ 51，留 54 有点余量。
+    <!-- 条目名最多三行的高度上限。13 DIP 字号行高约 17.5，三行 = 52.5，取 55 留余量。
          为什么给上限：TextWrapping="Wrap" 不设上限时长路径能把行撑到十几行，
          列表就散了。三行足够放下常见的"目录 + 文件名"组合。 -->
-    <sys:Double x:Key="Row.Name.MaxHeight">54</sys:Double>
-    <sys:Double x:Key="Font.Size.TileLabel">11</sys:Double>
+    <sys:Double x:Key="Row.Name.MaxHeight">55</sys:Double>
+    <!-- 磁贴标签与列表行统一 13 DIP（≈9.75pt）。用户明确要求"统一"：
+  两处字号不同会让同一屏里"列表里的名字"和"磁贴上的名字"看着像两种字号。
+         行高约 17.5，两行 35，档位表按这个预留标签空间。 -->
+    <sys:Double x:Key="Font.Size.TileLabel">13</sys:Double>
     <sys:Double x:Key="Font.Size.Title">13</sys:Double>
     <sys:Double x:Key="Font.Size.Status">11.5</sys:Double>
     <sys:Double x:Key="Font.Size.Glyph">14</sys:Double>
@@ -32,12 +35,12 @@
          "'32'不是 Height 的有效值"（US Tokens.xaml 里记录过的实测坑，勿改回） -->
     <GridLength x:Key="Row.Header">32</GridLength>
     <GridLength x:Key="Row.Status">24</GridLength>
-    <!-- 磁贴尺寸初值，须与 SettingsStore.TileScales 的「中」档一致 ——
-  启动时 ApplyTileIconScaleAtStartup 会用设置里的档位覆盖它们，
- 这里只在"设置缺失/损坏"时兜底。
-         90 = 44 图标 + 2 行标签(30) + 留边 16，长名字换行到第二行也放得下。 -->
-    <sys:Double x:Key="Tile.Size">90</sys:Double>
-    <sys:Double x:Key="Tile.Icon">44</sys:Double>
+    <!-- 磁贴尺寸初值，须与 SettingsStore.TileScales 的「中」档一致（91/48）——
+         启动时 ApplyTileIconScaleAtStartup 会用设置里的档位覆盖它们，
+         这里只在"设置缺失/损坏"时兜底。
+         91 = 48 图标 + 2 行 13 DIP 标签(35) + 留边 8。 -->
+    <sys:Double x:Key="Tile.Size">91</sys:Double>
+    <sys:Double x:Key="Tile.Icon">48</sys:Double>
     <sys:Double x:Key="Tile.ListIcon">20</sys:Double>
     <Thickness x:Key="Tile.Margin">3</Thickness>
     <Thickness x:Key="Grid.Padding">8</Thickness>
