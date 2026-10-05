@@ -27,21 +27,23 @@ public static class IconCache
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "AnywhereDoor", "iconcache");
 
-    /// <summary>缓存文件的路径 —— 纯算路径，不碰 COM 也不建目录。
+/// <summary>缓存文件的路径 —— 纯算路径，不碰 COM 也不建目录。
     /// 地图里因此**不需要存 iconPath**：由 target 就能推出来（它占了老文件 28% 的字节）。
-    /// t1 = 裁剪版（v1 没裁透明留白）；t2 = 裁剪加限比例（t1 会贴边裁，图标顶满白卡发紧）；
-    /// t3 = 内容判定的 alpha 阈值从 16 提到 128（治半透明晕圈把包围盒撑满，如 7-Zip）。
-    /// 版本号在文件名里，改裁剪策略必须升版本 —— 否则旧缓存永远命中，改动看不见。
+    /// t1 = 裁剪版；t2 = 裁剪加限比例；t3 = 内容判定 alpha 16→128（治半透明晕圈撑满包围盒）；
+    /// t4 = 取图与显示解耦：缓存一律存 512 档，显示尺寸由 DecodePixelWidth 降采样。
+    /// 版本号在文件名里，改裁剪/取图策略必须升版本 —— 否则旧缓存永远命中，改动看不见。
     ///
-    /// <paramref name="size"/> 是**物理像素**（调用方负责按 DPI 换算，见 GUI 侧 DpiScale）。
-    /// 尺寸进了文件名，所以换档位天然是"另一份缓存"，不会拿旧尺寸拉伸糊掉。</summary>
-    public static string PathFor(string target, int size = DefaultSize) =>
-   Path.Combine(CacheDir, $"{AppEntry.MakeId(target)}_{size}t3.png");
+    /// <b>为什么不带尺寸参数</b>：曾经按尺寸分档存过，实测发现两个问题 ——
+    /// ① 不同槽位各存一份、磁盘重复；② 裁剪后尺寸由内容决定，与请求尺寸无关，
+    /// 分档存根本对不齐（77 和 210 裁出来都是同一张 282）。
+    /// 一次取最大、显示时采样，磁盘一份就够，画质也不差（WPF 的双三次滤波够好）。</summary>
+    public static string PathFor(string target) =>
+        Path.Combine(CacheDir, $"{AppEntry.MakeId(target)}_{DefaultSize}t4.png");
 
     /// <summary>
-    /// 默认缓存档（物理像素）。取 512 而不是 256：巨缩略档120 DIP 在 175% 下
-    /// 要210 物理像素，256 只够刚够，200% 缩放就超了 —— 缓存宁大勿小，
-    /// 反正解码时 DecodePixelWidth 会按需降采样，放大存储不花钱。
+    /// 缓存与取图都用这个尺寸（物理像素）。
+    /// 取 512 而不是 256：巨缩略档 120 DIP 在 175% 下要 210 物理像素，200% 缩放要 240，
+    /// 256 就该不够了。往上也用不着更大 —— 真档位到 512 就封顶，见 <see cref="FetchSizeCap"/>。
     /// </summary>
     public const int DefaultSize = 512;
 
@@ -62,47 +64,63 @@ public static class IconCache
         public string? Error { get; }
     }
 
+/// <summary>
+    /// 提取图标并落缓存。<b>缓存的一律是"取最大 + 裁剪归一化"那份，不按请求尺寸分档。</b>
+    ///
+    /// 理由（探针实测）：shell 的真档位到 512 就封顶 —— 把 1024 缩回 512 与直接请求 512
+    /// 逐像素一致（差 0.28~0.87），说明再大都是插值。所以取 512 就拿到了全部真细节。
+    /// 显示尺寸交给 WPF 的 <c>DecodePixelWidth</c> 做一次高质量降采样即可 ——
+    /// 比"按每个槽位尺寸各存一份"更省磁盘，而且 WPF 的双三次滤波比我们自己做的好。
+    ///
+/// <paramref name="size"/> 只影响"向 shell 要多大的图"（见 <see cref="FetchSizeCap"/>），
+    /// 不影响落盘尺寸；调用方要按显示尺寸缩放就自己传给 Decode。
+    /// </summary>
     public static ProbeResult Extract(string target, int size = DefaultSize)
     {
-        Directory.CreateDirectory(CacheDir);
-        var cachePath = PathFor(target, size);
+   Directory.CreateDirectory(CacheDir);
+        var cachePath = PathFor(target);
 
         // 缓存命中直接回（读 PNG 实际尺寸当 natural），省掉每次启动的全量 COM 重跑
         if (File.Exists(cachePath))
-        {
-            var (w0, h0) = PngSize(cachePath);
-            return new ProbeResult(w0, h0, cachePath, $"{w0}x{h0}");
+     {
+  var (w0, h0) = PngSize(cachePath);
+          return new ProbeResult(w0, h0, cachePath, $"{w0}x{h0}");
         }
 
-        // UWP：包 logo 是透明底原图，先试；不行再走 shell 磁贴图（带磁贴底色）
-        if (IsUwp(target))
-        {
-            var logo = TryPackageLogo(target, size);
-            if (logo != null)
+    // UWP：包 logo 是透明底原图，先试；不行再走 shell 磁贴图（带磁贴底色）
+    if (IsUwp(target))
+ {
+            var logo = TryPackageLogo(target, FetchSizeCap);
+  if (logo != null)
             {
                 var trimmed = TrimTransparent(logo) ?? logo;
-                File.WriteAllBytes(cachePath, trimmed);
-                var (lw, lh) = PngSize(cachePath);
-                return new ProbeResult(lw, lh, cachePath, $"{lw}x{lh}");
+        File.WriteAllBytes(cachePath, trimmed);
+          var (lw, lh) = PngSize(cachePath);
+  return new ProbeResult(lw, lh, cachePath, $"{lw}x{lh}");
             }
-        }
+}
 
         var parseName = ToParseName(target);
-        var (nw, nh) = ProbeNatural(parseName, size);
-        var (cw, ch) = SavePng(parseName, size, cachePath);
+     var (nw, nh) = ProbeNatural(parseName, FetchSizeCap);
+        var (cw, ch) = SavePng(parseName, FetchSizeCap, cachePath);
 
-        // shell 图标同样要裁：exe 内嵌的图标常常"满幅画布 + 中间小字形"
+   // shell 图标同样要裁：exe 内嵌的图标常常"满幅画布 + 中间小字形"
         //（实测 7-Zip 512×512 里字形只占 20%），不裁它在磁贴里小得离谱。
         // 包 logo 那条路裁了、这条没裁，是之前"有的图标大有的小"的另一半原因。
-        if (TryTrimCachedFile(cachePath))
-        {
-            var (tw, th) = PngSize(cachePath);
-            return new ProbeResult(nw, nh, cachePath, $"{tw}x{th}");
-        }
-        return new ProbeResult(nw, nh, cachePath, $"{cw}x{ch}");
+      TryTrimCachedFile(cachePath);
+        var (fw, fh) = PngSize(cachePath);
+        return new ProbeResult(nw, nh, cachePath, $"{fw}x{fh}");
     }
 
     /// <summary>
+    /// 向 shell 取图用的尺寸（物理像素）。
+    ///
+    /// 为什么不是"越大越好"：真档位到 512 就封顶，多要只是浪费内存和时间。
+    /// 取 512 这档：覆盖到巨缩略档（120 DIP × 200% = 240 物理像素）仍有真细节。
+    /// </summary>
+    private const int FetchSizeCap = 512;
+
+/// <summary>
     /// 就地裁剪已落盘的缓存 PNG。成功返回 true（尺寸可能变小）。
     /// 读回字节重走一遍 <see cref="TrimTransparent"/> —— 复用同一套内容判定，
     /// 免得两条路各写一份、以后只改一处。
@@ -111,22 +129,23 @@ public static class IconCache
     {
         try
         {
-            var bytes = File.ReadAllBytes(cachePath);
+         var bytes = File.ReadAllBytes(cachePath);
             var trimmed = TrimTransparent(bytes);
             if (trimmed == null) return false;
             // 裁完反而更大/没变小就别写了，免得白占 IO
             if (trimmed.Length >= bytes.Length) return false;
             File.WriteAllBytes(cachePath, trimmed);
-            return true;
+     return true;
         }
         catch
         {
-            return false;   // 裁剪失败就用原图，不拦提取
-        }
+ return false;   // 裁剪失败就用原图，不拦提取
+   }
     }
 
+
     /// <summary>批量探测：单个失败不中断，错误收集进 Error。给"图标可得性分档统计"出证据。</summary>
-    public static List<ProbeItem> ProbeAll(IEnumerable<AppEntry> apps, int size = 256)
+    public static List<ProbeItem> ProbeAll(IEnumerable<AppEntry> apps, int size = DefaultSize)
     {
         var results = new List<ProbeItem>();
         foreach (var app in apps)

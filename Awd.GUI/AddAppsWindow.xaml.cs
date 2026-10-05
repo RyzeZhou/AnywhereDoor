@@ -91,7 +91,7 @@ public partial class AddAppsWindow : Window
     {
         var id = AppEntry.MakeId(app.Target);
         if (SmallIconCache.TryGetValue(id, out var cached)) return cached;
-        var png = IconCache.PathFor(app.Target, 256);
+        var png = IconCache.PathFor(app.Target);
         // 列表行槽位 20 DIP（Tile.ListIcon），同样要按 DPI 换算成物理像素再解码
         var img = TileVm.Decode(png, DpiScale.ToPixels(ListIconDip));
         SmallIconCache[id] = img;

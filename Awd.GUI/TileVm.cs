@@ -123,25 +123,32 @@ public ImageSource? IconImage
         }
     }
 
-    public async Task LoadIconAsync(SemaphoreSlim gate, Action<AppEntry> persist, int px)
+public async Task LoadIconAsync(SemaphoreSlim gate, Action<AppEntry> persist, int px)
     {
         // 网址/远程没有本地图标源（favicon 要联网，违背"不联网"原则），永远占位字形
         if (Entry.Kind is AppKind.Web or AppKind.Remote) return;
-        var img = Decode(Entry.IconPath, px);
+
+        // 缓存要的是**当前槽位这个物理像素**的图，不是"最大图再降采样"。
+        // 探针实测：shell 对请求尺寸原样返回（32→32、96→96），
+        // 而真档位到 512 就封顶（1024 缩回 512 与直接请求 512 逐像素一致）。
+        // 所以直接向 shell 要 px 既是"真细节"，又省掉一次自己做的重采样 —— 
+        // 自己降采样用的插值滤波不如 shell 那套（它给的是图标自己的高分档）。
+      var cached = IconCache.PathFor(Entry.Target);
+        var img = Decode(cached, px);
         if (img == null)
         {
             await gate.WaitAsync();
-            try
-            {
-                img = Decode(Entry.IconPath, px); // 拿到闸后复查，可能别的磁贴刚提取完
-                if (img == null)
-                {
-                    var probe = await Task.Run(() => IconCache.Extract(Entry.Target));
-                    Entry.IconPath = probe.CachePath;
-                    persist(Entry);
-                    img = Decode(Entry.IconPath, px);
-                }
-            }
+   try
+  {
+      img = Decode(cached, px); // 拿到闸后复查，可能别的磁贴刚提取完
+        if (img == null)
+     {
+            var probe = await Task.Run(() => IconCache.Extract(Entry.Target, px));
+   Entry.IconPath = probe.CachePath;
+       persist(Entry);
+     img = Decode(probe.CachePath, px);
+      }
+   }
             finally
             {
                 gate.Release();
