@@ -11,7 +11,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="任意门"
         Width="640" Height="480" MinWidth="600" MinHeight="360"
-        WindowStartupLocation="CenterScreen"
+     WindowStartupLocation="Manual"
         Background="{StaticResource Brush.Surface}"
         FontFamily="{StaticResource Font.Text}"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
@@ -335,9 +335,30 @@
                     <TextBlock Text="&#xE8BB;" FontFamily="{StaticResource Glyph.Font}"
                                FontSize="10" Foreground="{StaticResource Brush.Text.Secondary}"/>
                 </Button>
-                <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}"
-                        ToolTip="设置" Click="OnSettingsClick"
-                        shell:WindowChrome.IsHitTestVisibleInChrome="True">
+   <!-- 窗口尺寸预设。用E8A9（"全屏/展开"）而不是放大镜 ——
+后者是"搜索"的通用符号，会误导。菜单项在 XAML 里静态列出：
+ 数量少、不常变，改预设值不用重新编译。 -->
+  <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}"
+          ToolTip="窗口大小"
+ Click="OnWindowPresetMenu" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+     <TextBlock Text="&#xE8A9;" FontFamily="{StaticResource Glyph.Font}"
+            FontSize="13" Foreground="{StaticResource Brush.Text.Secondary}"/>
+       <Button.ContextMenu>
+    <ContextMenu>
+  <MenuItem Header="紧凑 560×400" Tag="0" Click="OnWindowPreset"/>
+       <MenuItem Header="默认 640×480" Tag="1" Click="OnWindowPreset"/>
+   <MenuItem Header="宽 900×560" Tag="2" Click="OnWindowPreset"/>
+       <MenuItem Header="高 680×760" Tag="3" Click="OnWindowPreset"/>
+    <MenuItem Header="大 1100×720" Tag="4" Click="OnWindowPreset"/>
+   <Separator/>
+  <!-- 最大化/还原：没它的话，从最大化状态点预设会没反应（对最大化窗口设 Width 无效） -->
+            <MenuItem Header="最大化 / 还原" Tag="-1" Click="OnToggleMaximize"/>
+     </ContextMenu>
+  </Button.ContextMenu>
+       </Button>
+      <Button DockPanel.Dock="Right" Style="{StaticResource HeaderButton}"
+            ToolTip="设置" Click="OnSettingsClick"
+        shell:WindowChrome.IsHitTestVisibleInChrome="True">
                     <TextBlock Text="&#xE713;" FontFamily="{StaticResource Glyph.Font}"
                                FontSize="13" Foreground="{StaticResource Brush.Text.Secondary}"/>
                 </Button>

@@ -27,7 +27,36 @@ public sealed class Settings
     /// 用户换档时换来的是"整套比例一起变"，不是单个图标大小乱跳。
         /// </summary>
         public int TileIconScale { get; set; }
+
+        /// <summary>
+        /// 窗口几何：宽度/高度/左边/上边（DIP），以及是否最大化。
+        /// 0 = 没记录过（首启，或老settings.json 没这些字段）。
+        ///
+        /// 为什么存在设置里而不是地图里：窗口大小是**这台机器上这个用户的习惯**，
+        /// 跟"哪张地图"无关。换地图时窗口应当保持用户刚调好的大小。
+        /// </summary>
+        public double WindowW { get; set; }
+        public double WindowH { get; set; }
+        public double WindowX { get; set; }
+        public double WindowY { get; set; }
+        public bool WindowMaximized { get; set; }
     }
+
+    /// <summary>窗口几何的默认值（与 MainWindow.xaml 的初始值一致）。</summary>
+    public const double DefaultWindowW = 640;
+    public const double DefaultWindowH = 480;
+
+    /// <summary>
+    /// 窗口几何是否可用。规则：
+    /// 尺寸必须有（宽高都 &gt; 0）；位置只在**完整合法**时采纳 ——
+    /// 单边越界（只记了 x 没记 y）说明是异常状态，用它会把窗口摆到屏幕外找不着。
+    /// </summary>
+    public static bool HasWindowGeometry(Settings s)
+        => s.WindowW >= 200 && s.WindowH >= 150;
+
+    /// <summary>位置是否可信（两边都有值才算完整）。</summary>
+    public static bool HasWindowPosition(Settings s)
+        => s.WindowX != 0 || s.WindowY != 0;
 
     /// <summary>图标档位表：档位序号 → (磁贴边长 DIP, 图标槽位 DIP, 说明)。</summary>
     /// 索引 0 不用（0 = 未设置）。实测 shell 能精确返回任意请求尺寸

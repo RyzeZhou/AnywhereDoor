@@ -138,9 +138,117 @@ public partial class MainWindow : Window
 
         LoadSites();
         ApplyTileIconScaleAtStartup();
-        ReloadFromStore();
+    RestoreWindowGeometry();
+  ReloadFromStore();
    // 启动时活动地图坏了、临时换了一张 —— 得在状态条上说清楚，别让人以为地图凭空变了
   if (App.StartupNote.Length > 0) SetStatus(App.StartupNote, warn: true);
+    }
+
+    /// <summary>
+    /// 恢复上次退出时的窗口几何。
+    ///
+    /// 配套：XAML 的 <c>WindowStartupLocation</c> 改成了 <c>Manual</c>。
+    /// 原来用 <c>CenterScreen</c> 时它会**覆盖**这里设的 Left/Top（自己居中），
+    /// 尺寸能记住但位置永远记不住 —— 表现为"窗口大小变了，位置每次都在中间"。
+    /// <c>Manual</c> + 这里手动摆位，两种情况才都对。
+    ///
+ /// 两个坑：
+    /// ① **最大化时ActualWidth/Height 是"还原后的尺寸"**，不是屏幕尺寸。
+    ///   所以要先记 maximized 状态，单独存；否则退出时存了一屏的尺寸，
+    ///   下次启动就"还原"成一个巨大的窗口。
+    /// ② 位置要**过屏幕范围校验**：拔掉外接屏、分辨率变了之后，
+    ///   存下来的坐标可能在屏幕外 —— 窗口会出现在"找不到的地方"。
+    ///   校验不过就只恢复尺寸、让系统自己摆位置。
+    /// </summary>
+private void RestoreWindowGeometry()
+    {
+        if (SettingsStore.HasWindowGeometry(_settings))
+        {
+            Width = _settings.WindowW;
+            Height = _settings.WindowH;
+        }
+        else
+        {
+            // 首次运行（或设置损坏）：XAML 里改成了 Manual 以便复原位置，
+            // 这里手动居中，否则窗口会贴在 (0,0) 而不是屏幕中间。
+            CenterOnScreen();
+        }
+
+        if (_settings.WindowMaximized)
+        {
+  WindowState = WindowState.Maximized;
+    return;         // 最大化时不要动 Left/Top，Window 会自己填工作区
+        }
+
+     if (!SettingsStore.HasWindowPosition(_settings)) return;
+  if (!IsOnAnyScreen(_settings.WindowX, _settings.WindowY, _settings.WindowW, _settings.WindowH))
+  {
+      SetStatus("上次的窗口位置不在当前屏幕上，只恢复了大小", warn: true);
+   CenterOnScreen();
+            return;
+        }
+    Left = _settings.WindowX;
+        Top = _settings.WindowY;
+    }
+
+    /// <summary>把窗口摆到当前屏幕的工作区中央（不依赖 WindowStartupLocation）。</summary>
+    private void CenterOnScreen()
+    {
+        // 用当前显示器的可用区而不是整个屏幕：任务栏/ Dock 那边不该压着
+        var area = SystemParameters.WorkArea;
+        // 构造期调用时 Width/Height 可能还没生效（还没布局），用 0 会算出负的 Left。
+        var w = Width > 0 ? Width : SettingsStore.DefaultWindowW;
+        var h = Height > 0 ? Height : SettingsStore.DefaultWindowH;
+        Left = area.Left + (area.Width - w) / 2;
+        Top = area.Top + (area.Height - h) / 2;
+    }
+
+    /// <summary>
+    /// 窗口左上角 + 尺寸是否落在**任一显示器**的工作区里（防止摆到屏幕外找不着）。
+    ///
+    /// 用 WPF 的 <see cref="System.Windows.SystemParameters"/> 而不是 WinForms 的
+    /// <c>Screen.AllScreens</c>：后者要多引一个程序集，而这里只需要"整体可見范围"，
+    /// SystemParameters 的虚拟屏坐标（WPF 的Left/Top 就是这个坐标系）够用。
+    /// 代价是拔掉外接屏后可能把窗口判成"还在屏内"—— 那也只是位置略偏，尺寸是对的。
+ /// </summary>
+    private static bool IsOnAnyScreen(double x, double y, double w, double h)
+    {
+        if (w < 1 || h < 1) return false;
+     // 露出边长 ≥ 80 DIP 就算"看得见" —— 要求完全在屏内太苛刻，
+        // 半个窗口在屏上、用户一拖就能回来，那才是可接受的
+        const double Visible = 80;
+        var vw = SystemParameters.VirtualScreenWidth;
+        var vh = SystemParameters.VirtualScreenHeight;
+    var vx = SystemParameters.VirtualScreenLeft;
+        var vy = SystemParameters.VirtualScreenTop;
+        var ox = Math.Max(0, Math.Min(x + w, vx + vw) - Math.Max(x, vx));
+   var oy = Math.Max(0, Math.Min(y + h, vy + vh) - Math.Max(y, vy));
+        return ox >= Visible && oy >= Visible;
+    }
+
+    /// <summary>退出时记下窗口几何。挂 OnClosing：按钮、Esc、Alt+F4 都走这一条。</summary>
+    protected override void OnClosing(CancelEventArgs e)
+    {
+     SaveWindowGeometry();
+        base.OnClosing(e);
+    }
+
+    private void SaveWindowGeometry()
+    {
+        // 最大化时不能记 ActualWidth/Height（那是"还原后"的尺寸）——
+        // 只记 maximized 标志，尺寸保持上一次正常状态的值。
+    if (WindowState == WindowState.Maximized)
+     {
+      _settings.WindowMaximized = true;
+   SettingsStore.Save(_settings);
+            return;
+        }
+    _settings.WindowMaximized = false;
+        _settings.WindowW = ActualWidth;
+ _settings.WindowH = ActualHeight;
+  _settings.WindowX = Left;
+        _settings.WindowY = Top;
+        SettingsStore.Save(_settings);
     }
 
     /// <summary>
@@ -1521,6 +1629,57 @@ private void ApplyTileIconScale()
 
     private string TileScaleLabel()
         => SettingsStore.TileScales[SettingsStore.ClampScale(_settings.TileIconScale)].Label;
+
+    /// <summary>标题栏那个按钮本身不做事，只把菜单弹出来（点按钮 = 右键效果）。</summary>
+    private void OnWindowPresetMenu(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.ContextMenu == null) return;
+     // ContextMenu 挂在 Button 上时，WPF 不会自动弹出（它不是标准菜单宿主场景），
+        // 要手动 IsOpen —— 顺带把 PlacementTarget 明确指到按钮，定位才不会跑偏。
+ btn.ContextMenu.PlacementTarget = btn;
+ btn.ContextMenu.IsOpen = true;
+  }
+
+    private void OnToggleMaximize(object sender, RoutedEventArgs e)
+    {
+        WindowState = WindowState == WindowState.Maximized
+        ? WindowState.Normal
+            : WindowState.Maximized;
+     SaveWindowGeometry();
+    }
+
+    /// <summary>
+    /// 预设窗口尺寸。数值不是随手定的，对应三种真实用法：
+    /// 紧凑（够放 3×3 磁贴，日常点程序）、宽（程序页一屏多列）、
+    /// 高（本地/网站页是多行列表，纵向空间才够用）。
+    /// 全部 ≥ <c>MinWidth/MinHeight</c>（600×360），否则会被 WPF 顶回去。
+    /// </summary>
+    private static readonly (string Label, double W, double H)[] WindowPresets =
+    {
+        ("紧凑 560×400", 560, 400),
+        ("默认 640×480", 640, 480),
+   ("宽 900×560", 900, 560),
+        ("高 680×760", 680, 760),
+  ("大 1100×720", 1100, 720),
+    };
+
+    private void OnWindowPreset(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem item || !int.TryParse(item.Tag as string, out var idx)) return;
+        if (idx < 0) return;               // -1 = 最大化/还原那条，不在这张表里
+        if (idx >= WindowPresets.Length) return;
+ var (_, w, h) = WindowPresets[idx];
+
+     // 从最大化切回来时要先恢复窗口态，否则设 Width/Height 不生效（对最大化窗口无效）
+      if (WindowState == WindowState.Maximized)
+            WindowState = WindowState.Normal;
+        Width = w;
+        Height = h;
+    // 尺寸立刻存一份：用户点完预设就关窗时，OnClosing 存的也是这个尺寸，
+        // 但存早一点能保证"点完预设立刻崩了"也不丢
+    SaveWindowGeometry();
+     SetStatus($"窗口已设为 {WindowPresets[idx].Label}");
+    }
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Close();
 
